@@ -47,6 +47,11 @@
             "@php artisan config:clear --ansi",
             "@php artisan test"
         ],
+        "conformance:fetch": "@php conformance/fetch-wordpress-tests.php",
+        "conformance": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php conformance/run.php"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"

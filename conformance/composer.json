@@ -1,0 +1,24 @@
+{
+    "name": "krafty-sprouts-media/wordpress-modernised-conformance",
+    "description": "Runs WordPress's own PHPUnit tests against this project. Separate because WordPress's tests need PHPUnit 9.6.",
+    "type": "project",
+    "license": "GPL-2.0-or-later",
+    "repositories": [
+        {
+            "type": "path",
+            "url": "..",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "require": {
+        "krafty-sprouts-media/wordpress-modernised": "@dev"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.6.38",
+        "yoast/phpunit-polyfills": "^1.1.5"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

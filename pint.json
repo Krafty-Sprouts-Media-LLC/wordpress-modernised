@@ -1,0 +1,8 @@
+{
+    "preset": "laravel",
+    "exclude": [
+        "conformance/wordpress-develop",
+        "conformance/vendor",
+        "conformance/cache"
+    ]
+}

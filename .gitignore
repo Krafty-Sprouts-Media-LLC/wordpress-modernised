@@ -2,6 +2,15 @@
 /private/
 CLAUDE.local.md
 
+# The checker's own packages, cache and the fetched WordPress tests
+/conformance/vendor
+/conformance/wordpress-develop
+/conformance/cache
+/conformance/composer.lock
+
+# Agent working notes
+/.superpowers/
+
 # Secrets and local environment
 .env
 .env.*
