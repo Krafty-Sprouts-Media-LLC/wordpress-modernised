@@ -6,7 +6,7 @@
 
 - **Pint, with Laravel's preset, formats every PHP file** in `app/`, `wp-api/`, `config/`, `database/`, `routes/`, `tests/` and `conformance/` (our harness files).
 - Pint never touches the fetched WordPress checkout (`conformance/wordpress-develop/`) or `vendor/`.
-- Run `vendor/bin/pint` before every commit. CI runs `vendor/bin/pint --test`.
+- Run `vendor/bin/pint` before every commit, **with no path arguments**. CI runs `vendor/bin/pint --test`. Given explicit paths, Pint ignores the exclusions in `pint.json`, and the checker's `conformance/vendor/` links back into the project, so Pint would loop.
 - We do **not** follow the WordPress Coding Standards (tabs, spaces inside parentheses, Yoda conditions). We don't merge WordPress code, so there's no reason to match its formatting.
 
 ## 2. The doors (`wp-api/`) vs the house (`app/`)

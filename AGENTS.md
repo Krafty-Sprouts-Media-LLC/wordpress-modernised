@@ -80,4 +80,8 @@ The local toolchain is Laravel Herd on Windows (PHP and Composer on `PATH` in Po
 composer install
 php artisan test
 vendor/bin/pint
+composer conformance:fetch
+composer conformance
 ```
+
+There are two test runners. `php artisan test` runs our own tests on PHPUnit 12. `composer conformance` is the checker: it runs WordPress 7.1.4's own tests, which need PHPUnit 9.6, against the booted app. `composer conformance:fetch` downloads those tests once. Pass PHPUnit options after `--`, for example `composer conformance -- --testsuite harness`.
