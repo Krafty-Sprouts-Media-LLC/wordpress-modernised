@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\Artisan;
 
 /**
  * Bootstrap for the checker: boots the real Laravel app, then loads
@@ -29,6 +30,9 @@ if (! is_dir(WP_TESTS_CHECKOUT)) {
 
 foreach ([
     'APP_ENV' => 'testing',
+    // The checker's own database, migrated fresh on every run, and no writes to the app's log.
+    'DB_DATABASE' => 'wordpress_conformance',
+    'LOG_CHANNEL' => 'null',
     'COMPOSER_VENDOR_DIR' => __DIR__.'/vendor',
     // Relative to the project root: Laravel does not treat Windows drive paths as absolute here.
     'APP_PACKAGES_CACHE' => 'conformance/cache/packages.php',
@@ -55,6 +59,12 @@ $app->make(Kernel::class)->bootstrap();
 // PHPUnit, as in WordPress's own test environment.
 restore_error_handler();
 restore_exception_handler();
+
+// A fresh database for every run: WordPress's tables plus Laravel's own.
+if (Artisan::call('migrate:fresh', ['--force' => true]) !== 0) {
+    fwrite(STDERR, Artisan::output());
+    exit(1);
+}
 
 // Stand-ins first: WordPress's utils.php declares a class that extends wpdb.
 require __DIR__.'/includes/stand-ins.php';

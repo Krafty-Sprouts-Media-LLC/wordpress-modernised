@@ -11,6 +11,9 @@ const TAG = '7.1.4';
 const SHA = '0afb74de8c3fe4c1869e44b62b0418d67b11aa4c';
 const REPOSITORY = 'https://github.com/WordPress/wordpress-develop.git';
 
+/** Folders of the checkout we use: WordPress's tests, and its source for reference. */
+const PATHS = ['tests/phpunit/includes', 'tests/phpunit/tests', 'src/wp-includes', 'src/wp-admin/includes'];
+
 $target = __DIR__.'/wordpress-develop';
 
 /**
@@ -40,6 +43,15 @@ if (is_dir($target)) {
             exit(1);
         }
 
+        // Bring an older checkout up to the current list of folders.
+        $have = explode("\n", git(['-C', $target, 'sparse-checkout', 'list']));
+        $missing = array_values(array_diff(PATHS, $have));
+
+        if ($missing) {
+            git(array_merge(['-C', $target, 'sparse-checkout', 'add'], $missing));
+            echo 'added '.implode(', ', $missing).PHP_EOL;
+        }
+
         echo 'already at '.TAG.PHP_EOL;
         exit(0);
     }
@@ -49,7 +61,7 @@ if (is_dir($target)) {
 }
 
 git(['clone', '--depth', '1', '--branch', TAG, '--filter=blob:none', '--sparse', REPOSITORY, $target]);
-git(['-C', $target, 'sparse-checkout', 'set', 'tests/phpunit/includes', 'tests/phpunit/tests', 'src/wp-includes']);
+git(array_merge(['-C', $target, 'sparse-checkout', 'set'], PATHS));
 
 $head = git(['-C', $target, 'rev-parse', 'HEAD']);
 

@@ -8,6 +8,7 @@
  * Contains code from WordPress 7.1.4: tests/phpunit/includes/abstract-testcase.php.
  */
 
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Util\Test;
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
@@ -53,17 +54,74 @@ abstract class WP_UnitTestCase extends TestCase
             $this->_backup_hooks();
         }
 
+        $this->start_transaction();
         $this->expectDeprecated();
     }
 
     public function tear_down()
     {
+        $this->run_sql('ROLLBACK');
+
         $this->expected_deprecated = [];
         $this->caught_deprecated = [];
         $this->expected_doing_it_wrong = [];
         $this->caught_doing_it_wrong = [];
 
         $this->_restore_hooks();
+    }
+
+    /**
+     * Starts the transaction every test runs in, and makes tables created
+     * during a test temporary, so they vanish with the rollback.
+     */
+    public function start_transaction()
+    {
+        $this->run_sql('SET autocommit = 0;');
+        $this->run_sql('START TRANSACTION;');
+
+        add_filter('query', [$this, '_create_temporary_tables']);
+        add_filter('query', [$this, '_drop_temporary_tables']);
+    }
+
+    /**
+     * Commits the current transaction.
+     */
+    public static function commit_transaction()
+    {
+        static::run_sql('COMMIT;');
+    }
+
+    /**
+     * Turns CREATE TABLE into CREATE TEMPORARY TABLE during tests.
+     */
+    public function _create_temporary_tables($query)
+    {
+        if (str_starts_with(trim($query), 'CREATE TABLE')) {
+            return substr_replace(trim($query), 'CREATE TEMPORARY TABLE', 0, 12);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Turns DROP TABLE into DROP TEMPORARY TABLE during tests.
+     */
+    public function _drop_temporary_tables($query)
+    {
+        if (str_starts_with(trim($query), 'DROP TABLE')) {
+            return substr_replace(trim($query), 'DROP TEMPORARY TABLE', 0, 10);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Runs one SQL statement on the shared connection. Stand-in until $wpdb
+     * exists; then it runs through $wpdb->query(), as WordPress's own does.
+     */
+    protected static function run_sql(string $sql): void
+    {
+        DB::connection()->getPdo()->exec($sql);
     }
 
     protected function assert_post_conditions()

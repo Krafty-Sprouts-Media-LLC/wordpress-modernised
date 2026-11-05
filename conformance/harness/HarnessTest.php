@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Runner\Version;
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
@@ -37,6 +39,12 @@ final class HarnessTest extends TestCase
 
         $this->assertFileExists($manifest);
         $this->assertGreaterThanOrEqual(CHECKER_STARTED_AT, filemtime($manifest));
+    }
+
+    public function test_checker_database_is_migrated(): void
+    {
+        $this->assertSame('wordpress_conformance', DB::getDatabaseName());
+        $this->assertTrue(Schema::hasTable(config('wordpress.table_prefix').'posts'));
     }
 
     public function test_laravel_app_is_booted(): void
