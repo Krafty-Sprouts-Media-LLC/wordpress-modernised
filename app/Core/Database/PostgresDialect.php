@@ -100,6 +100,20 @@ final class PostgresDialect implements Dialect
         return $mapped;
     }
 
+    public function mapColumns(array $columns): array
+    {
+        return array_map(function (stdClass $column): stdClass {
+            $table = $column->table !== '' ? strtolower($column->table) : null;
+
+            if ($table !== null && str_starts_with($table, strtolower($this->tablePrefix)) && isset(self::CASED_COLUMNS[$column->name])) {
+                $column = clone $column;
+                $column->name = $column->orgname = self::CASED_COLUMNS[$column->name];
+            }
+
+            return $column;
+        }, $columns);
+    }
+
     public function error(array $errorInfo, string $fallbackMessage): array
     {
         $state = (string) ($errorInfo[0] ?? '');

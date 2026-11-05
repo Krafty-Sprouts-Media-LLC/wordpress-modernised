@@ -93,6 +93,11 @@ final class WpdbConnection
      */
     public function charsetAndCollation(): array
     {
+        // PostgreSQL's UTF8 is full Unicode: WordPress's name for that is utf8mb4.
+        if ($this->isPostgres()) {
+            return ['utf8mb4', 'utf8mb4_unicode_520_ci'];
+        }
+
         $connection = $this->connection();
 
         return [(string) $connection->getConfig('charset'), (string) $connection->getConfig('collation')];
@@ -216,7 +221,7 @@ final class WpdbConnection
             } else {
                 $columns = $this->columns($statement);
                 $rows = array_map(fn (stdClass $row) => $dialect->mapRow($row, $columns), $this->rows($statement));
-                $result = new WpdbResult(isResultSet: true, rows: $rows, columns: $columns, affectedRows: $statement->rowCount());
+                $result = new WpdbResult(isResultSet: true, rows: $rows, columns: $dialect->mapColumns($columns), affectedRows: $statement->rowCount());
             }
         } catch (PDOException $e) {
             if ($savepoint) {
@@ -341,6 +346,96 @@ final class WpdbConnection
     }
 
     /**
+     * Runs several statements all-or-nothing: inside a savepoint when a
+     * transaction is open, otherwise in a transaction of its own. If $work
+     * returns false or throws, everything it did is rolled back.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $work
+     * @return T|false
+     */
+    public function atomically(callable $work): mixed
+    {
+        $pdo = $this->pdo();
+        $nested = $pdo->inTransaction();
+
+        $nested ? $pdo->exec('SAVEPOINT wm_atomic') : $pdo->beginTransaction();
+
+        try {
+            $result = $work();
+        } catch (Throwable $e) {
+            $nested ? $pdo->exec('ROLLBACK TO SAVEPOINT wm_atomic') : $pdo->rollBack();
+
+            throw $e;
+        }
+
+        if ($result === false) {
+            $nested ? $pdo->exec('ROLLBACK TO SAVEPOINT wm_atomic') : $pdo->rollBack();
+
+            return false;
+        }
+
+        $nested ? $pdo->exec('RELEASE SAVEPOINT wm_atomic') : $pdo->commit();
+
+        return $result;
+    }
+
+    /**
+     * A PostgreSQL table's columns in the shape of MySQL's SHOW FULL COLUMNS,
+     * for WordPress's charset and length checks. Text is UTF-8 (utf8mb4);
+     * PostgreSQL's single text type is reported as MySQL's largest, longtext.
+     *
+     * @return list<stdClass>
+     */
+    public function showFullColumns(string $table): array
+    {
+        $statement = $this->pdo()->prepare(
+            'SELECT column_name, data_type, character_maximum_length, numeric_precision, numeric_scale, is_nullable, column_default
+             FROM information_schema.columns
+             WHERE table_schema = current_schema() AND table_name = ?
+             ORDER BY ordinal_position'
+        );
+        $statement->execute([strtolower($table)]);
+
+        $columns = [];
+
+        foreach ($statement->fetchAll(PDO::FETCH_OBJ) as $column) {
+            $length = $column->character_maximum_length;
+            $type = match ($column->data_type) {
+                'character varying' => "varchar({$length})",
+                'character' => "char({$length})",
+                'text', 'json', 'jsonb' => 'longtext',
+                'bigint' => 'bigint(20)',
+                'integer' => 'int(11)',
+                'smallint' => 'smallint(6)',
+                'boolean' => 'tinyint(1)',
+                'numeric' => "decimal({$column->numeric_precision},{$column->numeric_scale})",
+                'double precision' => 'double',
+                'real' => 'float',
+                'timestamp without time zone', 'timestamp with time zone' => 'datetime',
+                'bytea' => 'longblob',
+                default => $column->data_type,
+            };
+            $isText = in_array($column->data_type, ['character varying', 'character', 'text', 'json', 'jsonb'], true);
+
+            $columns[] = (object) [
+                'Field' => $column->column_name,
+                'Type' => $type,
+                'Collation' => $isText ? 'utf8mb4_unicode_520_ci' : null,
+                'Null' => $column->is_nullable === 'YES' ? 'YES' : 'NO',
+                'Key' => '',
+                'Default' => $column->column_default,
+                'Extra' => '',
+                'Privileges' => 'select,insert,update,references',
+                'Comment' => '',
+            ];
+        }
+
+        return $columns;
+    }
+
+    /**
      * The columns of each primary or unique key of a PostgreSQL table, for REPLACE.
      *
      * @return list<list<string>>
@@ -429,7 +524,10 @@ final class WpdbConnection
 
         while (($row = $statement->fetch(PDO::FETCH_OBJ)) !== false) {
             foreach (get_object_vars($row) as $key => $value) {
-                if (is_float($value)) {
+                if (is_bool($value)) {
+                    // MySQL answers true/false (for example x LIKE y) with 1 and 0.
+                    $row->$key = $value ? '1' : '0';
+                } elseif (is_float($value)) {
                     // Shortest text that reads back as the same number (all digits, unlike (string)).
                     $row->$key = var_export($value, true);
                 } elseif ($value !== null && ! is_string($value)) {

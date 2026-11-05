@@ -44,6 +44,11 @@ final class MySqlDialect implements Dialect
         return $row;
     }
 
+    public function mapColumns(array $columns): array
+    {
+        return $columns;
+    }
+
     public function error(array $errorInfo, string $fallbackMessage): array
     {
         return [(int) ($errorInfo[1] ?? 0), (string) ($errorInfo[2] ?? $fallbackMessage)];

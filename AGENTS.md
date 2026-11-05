@@ -90,6 +90,6 @@ composer conformance:fetch
 composer conformance
 ```
 
-`docker compose up -d --wait` starts the local databases, MySQL 9.7 on port 3306 and MariaDB 12.3 on port 3307. Tests always run on a real database.
+`docker compose up -d --wait` starts the local databases: MySQL 9.7 on port 3306, MariaDB 12.3 on 3307, and PostgreSQL 18 on 5437. Tests always run on a real database: MySQL by default; set `DB_CONNECTION=mariadb DB_PORT=3307` or `DB_CONNECTION=pgsql DB_PORT=5437` to run the same tests (and the checker) on the others.
 
 There are two test runners. `php artisan test` runs our own tests on PHPUnit 12. `composer conformance` is the checker: it runs WordPress 7.1.4's own tests, which need PHPUnit 9.6, against the booted app. `composer conformance:fetch` downloads those tests once. Pass PHPUnit options after `--`, for example `composer conformance -- --testsuite harness`.

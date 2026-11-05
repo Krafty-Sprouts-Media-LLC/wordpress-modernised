@@ -93,6 +93,21 @@ final class WpdbPostgresTest extends TestCase
         $this->assertSame(1, $wpdb->delete($wpdb->options, ['option_name' => 'wm_b']));
     }
 
+    public function test_a_failed_replace_keeps_the_original_row(): void
+    {
+        global $wpdb;
+
+        $wpdb->insert($wpdb->options, ['option_name' => 'wm_keep', 'option_value' => 'original', 'autoload' => 'off']);
+
+        // option_value is required (NOT NULL, no default), so the insert half fails.
+        $wpdb->suppress_errors(true);
+        $this->assertFalse($wpdb->replace($wpdb->options, ['option_name' => 'wm_keep', 'autoload' => 'off']));
+        $wpdb->suppress_errors(false);
+
+        // MySQL's REPLACE is all-or-nothing: the old row must survive.
+        $this->assertSame('original', $wpdb->get_var("SELECT option_value FROM {$wpdb->options} WHERE option_name = 'wm_keep'"));
+    }
+
     public function test_mysql_only_raw_sql_fails_with_a_clear_note(): void
     {
         global $wpdb;

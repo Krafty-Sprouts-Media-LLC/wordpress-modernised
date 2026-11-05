@@ -26,6 +26,7 @@
 | **Why** | PostgreSQL support with API-level compatibility (owner's decisions, 2026-11-05). |
 | **Plugins it breaks** | On PostgreSQL only: plugins that write MySQL-only SQL themselves, store NUL bytes in text, switch databases with `$wpdb->select()`, or create tables with `dbDelta()`. MySQL and MariaDB are unchanged (pinned by `WpdbMySqlDialectTest`). |
 | **How they are fixed** | Use `$wpdb`'s methods and portable SQL; native plugins create tables with Laravel migrations. |
+| **WordPress tests** | On PostgreSQL the checker runs all 994 tests: 695 pass, and the rest are listed in `conformance/diverged.php` (`'pgsql'`) or `waiting.php` with reasons. Diverged on PostgreSQL: all of `Tests_DB_dbDelta` (decision D) and `Tests_DB_Charset` (MySQL's character sets); `Tests_DB`'s three SQL-mode tests; two `prepare()` tests and one update test that check for MySQL's escaping or backticks in the SQL text. MySQL and MariaDB: unchanged (994 tests, 30 listed). |
 
 ## `$wpdb->dbh` is a PDO connection, not mysqli
 

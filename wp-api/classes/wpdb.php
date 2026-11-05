@@ -2853,6 +2853,7 @@ class wpdb
      * REPLACE on PostgreSQL, with MySQL's meaning: remove any row that clashes
      * on the primary key or a unique key, then insert. Returns the rows
      * affected (deleted plus inserted), as MySQL does, or false on failure.
+     * All-or-nothing: if the insert fails, nothing is deleted.
      *
      * @since WM-0.3.0
      *
@@ -2882,42 +2883,45 @@ class wpdb
             $clashes[] = $this->prepare('('.implode(' AND ', $conditions).')', $values);
         }
 
-        $deleted = 0;
+        // All-or-nothing, as MySQL's REPLACE is: if the insert fails, the deleted row comes back.
+        return $this->wm_connection()->atomically(function () use ($table, $data, $clashes) {
+            $deleted = 0;
 
-        if ($clashes) {
-            $deleted = $this->query('DELETE FROM '.$this->quote_identifier($table).' WHERE '.implode(' OR ', $clashes));
+            if ($clashes) {
+                $deleted = $this->query('DELETE FROM '.$this->quote_identifier($table).' WHERE '.implode(' OR ', $clashes));
 
-            if ($deleted === false) {
+                if ($deleted === false) {
+                    return false;
+                }
+            }
+
+            $formats = [];
+            $values = [];
+            foreach ($data as $value) {
+                if (is_null($value['value'])) {
+                    $formats[] = 'NULL';
+
+                    continue;
+                }
+
+                $formats[] = $value['format'];
+                $values[] = $value['value'];
+            }
+
+            $fields = implode(', ', array_map([$this, 'quote_identifier'], array_keys($data)));
+            $sql = 'INSERT INTO '.$this->quote_identifier($table)." ($fields) VALUES (".implode(', ', $formats).')';
+
+            $this->check_current_query = false;
+            $inserted = $this->query($this->prepare($sql, $values));
+
+            if ($inserted === false) {
                 return false;
             }
-        }
 
-        $formats = [];
-        $values = [];
-        foreach ($data as $value) {
-            if (is_null($value['value'])) {
-                $formats[] = 'NULL';
+            $this->rows_affected = $deleted + $inserted;
 
-                continue;
-            }
-
-            $formats[] = $value['format'];
-            $values[] = $value['value'];
-        }
-
-        $fields = implode(', ', array_map([$this, 'quote_identifier'], array_keys($data)));
-        $sql = 'INSERT INTO '.$this->quote_identifier($table)." ($fields) VALUES (".implode(', ', $formats).')';
-
-        $this->check_current_query = false;
-        $inserted = $this->query($this->prepare($sql, $values));
-
-        if ($inserted === false) {
-            return false;
-        }
-
-        $this->rows_affected = $deleted + $inserted;
-
-        return $this->rows_affected;
+            return $this->rows_affected;
+        });
     }
 
     /**
@@ -3638,7 +3642,7 @@ class wpdb
      *
      * @since WM-0.2.0
      * @since WP-4.2.0
-     * @since WM-0.3.0 Changed: on PostgreSQL, every table is UTF-8 ('utf8mb4'), without MySQL's SHOW commands.
+     * @since WM-0.3.0 Changed: on PostgreSQL, the column details come from PostgreSQL's catalog in SHOW FULL COLUMNS' shape (all text is UTF-8).
      *
      * @param  string  $table  Table name.
      * @return string|WP_Error Table character set, WP_Error object if it couldn't be found.
@@ -3665,13 +3669,6 @@ class wpdb
             return $charset;
         }
 
-        // WM: PostgreSQL is all UTF-8, and has no MySQL SHOW commands to ask.
-        if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
-            $this->table_charset[$tablekey] = 'utf8mb4';
-
-            return 'utf8mb4';
-        }
-
         if (isset($this->table_charset[$tablekey])) {
             return $this->table_charset[$tablekey];
         }
@@ -3679,9 +3676,15 @@ class wpdb
         $charsets = [];
         $columns = [];
 
-        $table_parts = explode('.', $table);
-        $table = '`'.implode('`.`', $table_parts).'`';
-        $results = $this->get_results("SHOW FULL COLUMNS FROM $table");
+        // WM: PostgreSQL has no SHOW FULL COLUMNS; the house builds the same
+        // column details from PostgreSQL's catalog (all text is UTF-8).
+        if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            $results = $this->wm_connection()->showFullColumns($table);
+        } else {
+            $table_parts = explode('.', $table);
+            $table = '`'.implode('`.`', $table_parts).'`';
+            $results = $this->get_results("SHOW FULL COLUMNS FROM $table");
+        }
         if (! $results) {
             return new WP_Error('wpdb_get_table_charset_failure', __('Could not retrieve table charset.'));
         }

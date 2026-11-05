@@ -51,6 +51,15 @@ interface Dialect
     public function mapRow(stdClass $row, array $columns): stdClass;
 
     /**
+     * Shapes column details (from mysqli_fetch_field()'s shape) the way
+     * WordPress's mysqli columns look, after the rows have been mapped.
+     *
+     * @param  list<stdClass>  $columns
+     * @return list<stdClass>
+     */
+    public function mapColumns(array $columns): array;
+
+    /**
      * Turns a database error into WordPress's error number and message.
      *
      * @param  array<int, mixed>  $errorInfo  PDO's errorInfo.
