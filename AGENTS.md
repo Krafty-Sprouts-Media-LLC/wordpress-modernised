@@ -70,6 +70,7 @@ We take things from WordPress only when we choose to: mainly security fixes for 
 | `docs/coding-standards.md` | Code style, version tags, docblocks and naming |
 | `docs/plans/` | One plan per build step, `<date>-<step>-<name>.md`, written just before it is built |
 | `docs/divergences.md` | Every deliberate difference from WordPress (rule 4) |
+| `docs/backlog.md` | Review findings not fixed yet, and decisions waiting for the owner. Delete an item in the commit that does it |
 | `private/` | Internal briefs, references and notes. Gitignored; never published |
 
 ## Commands
