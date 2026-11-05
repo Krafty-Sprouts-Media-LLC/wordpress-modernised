@@ -6,6 +6,7 @@ namespace App\Core\Database;
 
 use Illuminate\Database\Connection;
 use Illuminate\Database\MySqlConnection;
+use Illuminate\Database\PostgresConnection;
 use Illuminate\Support\Facades\DB;
 use PDO;
 use PDOException;
@@ -40,6 +41,9 @@ final class WpdbConnection
     private string $lastError = '';
 
     private int $lastErrorNumber = 0;
+
+    /** @var array<string, Dialect> */
+    private array $dialects = [];
 
     /**
      * @param  Connection|null  $own  A connection of its own; null means Laravel's default connection, looked up on every use.
@@ -126,7 +130,11 @@ final class WpdbConnection
             return new self(null);
         }
 
-        return new self(new MySqlConnection($pdo, '', '', $default->getConfig()));
+        $connection = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql'
+            ? new PostgresConnection($pdo, '', '', $default->getConfig())
+            : new MySqlConnection($pdo, '', '', $default->getConfig());
+
+        return new self($connection);
     }
 
     /**
@@ -175,27 +183,50 @@ final class WpdbConnection
 
         // mysqli sends plain text queries and gets the server's own text back.
         // PDO's default (native prepares) uses the binary protocol: an extra
-        // round trip per query, and DOUBLE values rounded by PHP. So wpdb's
-        // queries use emulated prepares and text results, then restore
-        // Laravel's settings. Stacked statements stay refused by the
-        // connection's MULTI_STATEMENTS option.
+        // round trip per query, and DOUBLE values rounded by PHP. So on MySQL
+        // wpdb's queries use emulated prepares (stacked statements stay refused
+        // by the connection's MULTI_STATEMENTS option). PostgreSQL keeps native
+        // prepares, which refuse stacked statements themselves. Values come back
+        // as text either way; Laravel's settings are restored afterwards.
+        $dialect = $this->dialect();
         $emulate = $pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES);
         $stringify = $pdo->getAttribute(PDO::ATTR_STRINGIFY_FETCHES);
-        $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, true);
-        $pdo->setAttribute(PDO::ATTR_STRINGIFY_FETCHES, true);
+        $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, $dialect->allowsEmulatedPrepares());
+        $pdo->setAttribute(PDO::ATTR_STRINGIFY_FETCHES, $dialect->stringifiesFetches());
+
+        // PostgreSQL aborts the whole transaction when one statement fails; MySQL
+        // only fails that statement. Inside a transaction, a savepoint per query
+        // gives PostgreSQL MySQL's behaviour, so tolerated failures (common in
+        // WordPress) don't break everything after them.
+        $savepoint = $this->isPostgres() && $pdo->inTransaction();
 
         try {
+            if ($savepoint) {
+                $pdo->exec('SAVEPOINT wm_wpdb');
+            }
+
             $statement = $pdo->query($sql);
 
-            $result = $statement->columnCount() === 0
-                ? new WpdbResult(isResultSet: false, affectedRows: $statement->rowCount())
-                : new WpdbResult(
-                    isResultSet: true,
-                    rows: $this->rows($statement),
-                    columns: $this->columns($statement),
-                    affectedRows: $statement->rowCount(),
-                );
+            if ($savepoint) {
+                $pdo->exec('RELEASE SAVEPOINT wm_wpdb');
+            }
+
+            if ($statement->columnCount() === 0) {
+                $result = new WpdbResult(isResultSet: false, affectedRows: $statement->rowCount());
+            } else {
+                $columns = $this->columns($statement);
+                $rows = array_map(fn (stdClass $row) => $dialect->mapRow($row, $columns), $this->rows($statement));
+                $result = new WpdbResult(isResultSet: true, rows: $rows, columns: $columns, affectedRows: $statement->rowCount());
+            }
         } catch (PDOException $e) {
+            if ($savepoint) {
+                try {
+                    $pdo->exec('ROLLBACK TO SAVEPOINT wm_wpdb');
+                } catch (Throwable) {
+                    // The connection itself is gone; the error below says so.
+                }
+            }
+
             $this->recordError($e);
 
             return false;
@@ -215,7 +246,27 @@ final class WpdbConnection
      */
     public function escape(string $text): string
     {
-        return substr($this->pdo()->quote($text), 1, -1);
+        return $this->dialect()->escape($this->pdo(), $text);
+    }
+
+    /**
+     * The SQL dialect of this connection's database.
+     */
+    public function dialect(): Dialect
+    {
+        $driver = $this->connection()->getDriverName();
+
+        return $this->dialects[$driver] ??= $driver === 'pgsql'
+            ? new PostgresDialect((string) config('wordpress.table_prefix'))
+            : new MySqlDialect;
+    }
+
+    /**
+     * Whether this connection's database is PostgreSQL.
+     */
+    public function isPostgres(): bool
+    {
+        return $this->connection()->getDriverName() === 'pgsql';
     }
 
     public function lastError(): string
@@ -228,9 +279,12 @@ final class WpdbConnection
         return $this->lastErrorNumber;
     }
 
-    public function lastInsertId(): int
+    /**
+     * The ID generated by the last insert (on PostgreSQL, into $table).
+     */
+    public function lastInsertId(?string $table = null): int
     {
-        return (int) $this->pdo()->lastInsertId();
+        return $this->dialect()->lastInsertId($this->pdo(), $table);
     }
 
     /**
@@ -243,14 +297,23 @@ final class WpdbConnection
 
     public function characterSetName(): string
     {
+        if ($this->isPostgres()) {
+            return 'utf8mb4'; // PostgreSQL connections are always UTF-8.
+        }
+
         return (string) $this->scalar('SELECT @@character_set_client');
     }
 
     /**
-     * Sets the connection's character set and collation, as WordPress does on connecting.
+     * Sets the connection's character set and collation, as WordPress does on
+     * connecting. On PostgreSQL everything is UTF-8 already, so there is nothing to set.
      */
     public function setCharset(string $charset, string $collate = ''): bool
     {
+        if ($this->isPostgres()) {
+            return true;
+        }
+
         $sql = 'SET NAMES '.$this->pdo()->quote($charset);
 
         if ($collate !== '') {
@@ -266,14 +329,41 @@ final class WpdbConnection
      */
     public function selectDatabase(string $name): bool
     {
+        // PostgreSQL can't switch databases on an open connection: only the
+        // current one can be "selected" (recorded in docs/divergences.md).
+        if ($this->isPostgres()) {
+            return $name === $this->connection()->getDatabaseName();
+        }
+
         // Always switch: comparing with Laravel's configured name would skip
         // switching back after an earlier switch away.
         return $this->query('USE `'.str_replace('`', '``', $name).'`') !== false;
     }
 
+    /**
+     * The columns of each primary or unique key of a PostgreSQL table, for REPLACE.
+     *
+     * @return list<list<string>>
+     */
+    public function uniqueKeys(string $table): array
+    {
+        $statement = $this->pdo()->prepare(
+            'SELECT array_to_string(array_agg(a.attname ORDER BY k.ord), \',\')
+             FROM pg_index i
+             JOIN pg_class c ON c.oid = i.indrelid
+             CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
+             JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum
+             WHERE c.relname = ? AND (i.indisunique OR i.indisprimary)
+             GROUP BY i.indexrelid'
+        );
+        $statement->execute([strtolower($table)]);
+
+        return array_map(fn ($columns) => explode(',', $columns), $statement->fetchAll(PDO::FETCH_COLUMN));
+    }
+
     public function ping(): bool
     {
-        return $this->query('DO 1') !== false;
+        return $this->query($this->isPostgres() ? 'SELECT 1' : 'DO 1') !== false;
     }
 
     /**
@@ -325,8 +415,7 @@ final class WpdbConnection
     {
         $info = $e instanceof PDOException ? ($e->errorInfo ?? []) : [];
 
-        $this->lastErrorNumber = (int) ($info[1] ?? 0);
-        $this->lastError = (string) ($info[2] ?? $e->getMessage());
+        [$this->lastErrorNumber, $this->lastError] = $this->dialect()->error($info, $e->getMessage());
     }
 
     /**
@@ -340,7 +429,10 @@ final class WpdbConnection
 
         while (($row = $statement->fetch(PDO::FETCH_OBJ)) !== false) {
             foreach (get_object_vars($row) as $key => $value) {
-                if ($value !== null && ! is_string($value)) {
+                if (is_float($value)) {
+                    // Shortest text that reads back as the same number (all digits, unlike (string)).
+                    $row->$key = var_export($value, true);
+                } elseif ($value !== null && ! is_string($value)) {
                     $row->$key = (string) $value;
                 }
             }

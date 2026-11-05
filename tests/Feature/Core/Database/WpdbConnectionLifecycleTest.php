@@ -50,11 +50,11 @@ final class WpdbConnectionLifecycleTest extends TestCase
     {
         global $wpdb;
 
-        $id = $wpdb->get_var('SELECT CONNECTION_ID()');
+        $id = $wpdb->get_var($this->connectionIdSql());
         $this->killConnection((int) $id);
 
         $this->assertSame('1', $wpdb->get_var('SELECT 1'));
-        $this->assertNotSame($id, $wpdb->get_var('SELECT CONNECTION_ID()'));
+        $this->assertNotSame($id, $wpdb->get_var($this->connectionIdSql()));
     }
 
     public function test_two_plugin_connections_to_the_same_database_both_work(): void
@@ -75,6 +75,10 @@ final class WpdbConnectionLifecycleTest extends TestCase
 
         $site = DB::getDatabaseName();
 
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $this->markTestSkipped("PostgreSQL can't switch databases on an open connection (docs/divergences.md).");
+        }
+
         $wpdb->select('wordpress_conformance');
         $wpdb->select($site);
 
@@ -87,11 +91,23 @@ final class WpdbConnectionLifecycleTest extends TestCase
     private function killConnection(int $id): void
     {
         $config = DB::connection()->getConfig();
-        $killer = new PDO(
-            "mysql:host={$config['host']};port={$config['port']}",
-            $config['username'],
-            $config['password'],
-        );
+
+        if ($config['driver'] === 'pgsql') {
+            $killer = new PDO("pgsql:host={$config['host']};port={$config['port']};dbname={$config['database']}", $config['username'], $config['password']);
+            $killer->query("SELECT pg_terminate_backend({$id})");
+
+            return;
+        }
+
+        $killer = new PDO("mysql:host={$config['host']};port={$config['port']}", $config['username'], $config['password']);
         $killer->exec("KILL {$id}");
+    }
+
+    /**
+     * The SQL that returns the current connection's server-side ID.
+     */
+    private function connectionIdSql(): string
+    {
+        return DB::connection()->getDriverName() === 'pgsql' ? 'SELECT pg_backend_pid()' : 'SELECT CONNECTION_ID()';
     }
 }

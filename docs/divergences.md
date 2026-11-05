@@ -14,6 +14,19 @@
 | **Plugins it breaks** | On PostgreSQL only: plugins writing their own SQL that inserts `0000-00-00` dates, relies on unsigned overflow behaviour, quotes WordPress's mixed-case columns (`"ID"`), or uses MySQL-only syntax (API-level compatibility, AGENTS.md rule 3). MySQL and MariaDB are unchanged. |
 | **How they are fixed** | Use `$wpdb`'s methods, which handle the differences; write portable SQL. |
 
+## `$wpdb` on PostgreSQL
+
+**Since:** WM-0.3.0
+
+| | |
+|---|---|
+| **What WordPress does** | `$wpdb` speaks MySQL only. |
+| **What we do instead** | On PostgreSQL, `$wpdb`'s **methods** work: `insert()`, `update()`, `delete()`, `replace()`, `get_var()`, `get_row()`, `get_col()`, `get_results()`, `prepare()`, `esc_sql()`, `insert_id`, `rows_affected`. A small dialect seam (`App\Core\Database\Dialect`) handles the differences:<br>- names are double-quoted and lowercased;<br>- escaping doubles quotes, as PostgreSQL's standard strings expect (backslash is ordinary text);<br>- `REPLACE` keeps MySQL's meaning (delete the clashing row, then insert; 2 rows affected);<br>- the insert ID comes from the table's identity sequence;<br>- empty dates (`0000-00-00 00:00:00`) are stored as NULL and read back as `0000-00-00 00:00:00`;<br>- results give WordPress's column casing (`ID`, `comment_ID`) for WordPress's tables;<br>- every table counts as UTF-8 (`utf8mb4`), so MySQL's charset checks are skipped. |
+| **What stays different** | **Plugins' own SQL is passed through as written, never translated** (AGENTS.md rule 3): MySQL-only syntax (backticks, `LIMIT 0, 10`, MySQL functions) fails, with a note saying so. **NUL bytes are removed from text** (PostgreSQL text can't hold them). **Inside a transaction, each `$wpdb` query runs in its own savepoint**, so a failed query fails alone, as in MySQL (PostgreSQL would otherwise abort the whole transaction); this costs two small extra round trips per query inside transactions. `$wpdb->select()` can't switch to another database (PostgreSQL connections can't). `dbDelta()` is not supported (owner's decision D). Lost connections are recognised from PostgreSQL's messages, so `$wpdb` reconnects as on MySQL. |
+| **Why** | PostgreSQL support with API-level compatibility (owner's decisions, 2026-11-05). |
+| **Plugins it breaks** | On PostgreSQL only: plugins that write MySQL-only SQL themselves, store NUL bytes in text, switch databases with `$wpdb->select()`, or create tables with `dbDelta()`. MySQL and MariaDB are unchanged (pinned by `WpdbMySqlDialectTest`). |
+| **How they are fixed** | Use `$wpdb`'s methods and portable SQL; native plugins create tables with Laravel migrations. |
+
 ## `$wpdb->dbh` is a PDO connection, not mysqli
 
 **Since:** WM-0.2.0
