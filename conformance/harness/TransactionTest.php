@@ -13,6 +13,14 @@ final class TransactionTest extends WP_UnitTestCase
         $this->assertTrue(DB::connection()->getPdo()->inTransaction());
     }
 
+    public function test_the_transaction_is_laravels_so_house_code_can_nest_inside_it()
+    {
+        // House services use DB::transaction(); inside a raw START TRANSACTION
+        // that would fail with "There is already an active transaction".
+        $this->assertSame(1, DB::transactionLevel());
+        $this->assertSame('ok', DB::transaction(fn () => 'ok'));
+    }
+
     public function test_writes_are_rolled_back_a()
     {
         DB::table(config('wordpress.table_prefix').'options')->insert([

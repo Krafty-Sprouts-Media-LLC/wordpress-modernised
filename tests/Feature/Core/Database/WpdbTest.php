@@ -83,6 +83,29 @@ final class WpdbTest extends TestCase
         $this->assertSame('1', $other->get_var('SELECT 1'));
     }
 
+    public function test_double_values_keep_full_precision_like_mysqli(): void
+    {
+        global $wpdb;
+
+        // mysqli returns the server's own text for a DOUBLE; PDO's binary
+        // protocol would hand back a PHP float rounded to 14 digits.
+        $this->assertSame('0.3333333333333333', $wpdb->get_var('SELECT 1.0e0/3'));
+    }
+
+    public function test_wpdb_queries_are_visible_to_laravel_listeners(): void
+    {
+        global $wpdb;
+
+        $seen = [];
+        DB::listen(function ($query) use (&$seen) {
+            $seen[] = $query->sql;
+        });
+
+        $wpdb->get_var('SELECT 42');
+
+        $this->assertContains('SELECT 42', $seen);
+    }
+
     public function test_one_statement_per_query_like_mysqli(): void
     {
         global $wpdb;

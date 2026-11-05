@@ -864,13 +864,32 @@ class wpdb
             $this->load_col_info();
         }
 
-        // WM: the live PDO, which for the site's database is Laravel's current one.
-        if ($name === 'dbh' && $this->dbh && $this->wm_connection()) {
-            return $this->wm_connection()->pdo();
+        // WM: for the site's database, $dbh is a live view of Laravel's current
+        // connection, opened on first use (null if it cannot be opened).
+        if ($name === 'dbh' && $this->wm_virtual_dbh) {
+            if (! $this->connection) {
+                return null;
+            }
+
+            try {
+                return $this->connection->pdo();
+            } catch (Throwable $e) {
+                return null;
+            }
         }
 
         return $this->$name;
     }
+
+    /**
+     * Whether `$dbh` is the live view of Laravel's connection (the site's
+     * database) rather than a stored handle.
+     *
+     * @since WM-0.2.0
+     *
+     * @var bool
+     */
+    protected $wm_virtual_dbh = false;
 
     /**
      * The house connection behind this wpdb. Built from `$dbh` when a subclass
@@ -883,7 +902,7 @@ class wpdb
      */
     protected function wm_connection()
     {
-        if (! $this->connection && $this->dbh instanceof PDO) {
+        if (! $this->connection && ! $this->wm_virtual_dbh && $this->dbh instanceof PDO) {
             $this->connection = WpdbConnection::forPdo($this->dbh);
         }
 
@@ -910,6 +929,14 @@ class wpdb
         if (in_array($name, $protected_members, true)) {
             return;
         }
+
+        // WM: setting $dbh on the site's wpdb picks the connection behind that handle.
+        if ($name === 'dbh' && $this->wm_virtual_dbh) {
+            $this->connection = $value instanceof PDO ? WpdbConnection::forPdo($value) : null;
+
+            return;
+        }
+
         $this->$name = $value;
     }
 
@@ -924,6 +951,11 @@ class wpdb
      */
     public function __isset($name)
     {
+        // WM: the site's $dbh is set while it has a connection.
+        if ($name === 'dbh' && $this->wm_virtual_dbh) {
+            return $this->connection !== null;
+        }
+
         return isset($this->$name);
     }
 
@@ -937,6 +969,13 @@ class wpdb
      */
     public function __unset($name)
     {
+        // WM: unsetting the site's $dbh detaches its connection.
+        if ($name === 'dbh' && $this->wm_virtual_dbh) {
+            $this->connection = null;
+
+            return;
+        }
+
         unset($this->$name);
     }
 
@@ -2092,21 +2131,42 @@ class wpdb
         $this->is_mysql = true;
 
         // WM: the connection comes from Laravel: its own for the site's database,
-        // an on-demand one for any other. $this->dbh is that connection's PDO.
+        // an on-demand one for any other. Reconnecting reopens the same one.
         try {
-            $this->connection = WpdbConnection::for(
-                (string) $this->dbhost,
-                (string) $this->dbuser,
-                (string) $this->dbpassword,
-                (string) $this->dbname,
-            );
-            $this->dbh = $this->wm_connection()->pdo();
+            if ($this->connection) {
+                $connected = $this->connection->reconnect();
+            } else {
+                $this->connection = WpdbConnection::for(
+                    (string) $this->dbhost,
+                    (string) $this->dbuser,
+                    (string) $this->dbpassword,
+                    (string) $this->dbname,
+                );
+                $connected = $this->connection->isShared() || (bool) $this->connection->pdo();
+            }
         } catch (Throwable $e) {
             $this->connection = null;
-            $this->dbh = null;
+            $connected = false;
         }
 
-        if (! $this->dbh && $allow_bail) {
+        // WM: the site's own database. $dbh becomes a live view of Laravel's
+        // connection, opened on first use, so starting the app never needs the
+        // database. Laravel's connector has already set the character set,
+        // collation and WordPress's SQL modes (config/database.php).
+        if ($connected && $this->connection->isShared()) {
+            // Only the first time: once $dbh is virtual, unset() would reach __unset() and detach it.
+            if (! $this->wm_virtual_dbh) {
+                unset($this->dbh);
+                $this->wm_virtual_dbh = true;
+            }
+            [$this->charset, $this->collate] = $this->connection->charsetAndCollation();
+            $this->has_connected = true;
+            $this->ready = true;
+
+            return true;
+        }
+
+        if (! $connected && $allow_bail) {
             if (function_exists('wp_load_translations_early')) {
                 wp_load_translations_early();
             }
@@ -2141,7 +2201,9 @@ class wpdb
             $this->bail($message, 'db_connect_fail');
 
             return false;
-        } elseif ($this->dbh) {
+        } elseif ($connected) {
+            $this->dbh = $this->connection->pdo();
+
             if (! $this->has_connected) {
                 $this->init_charset();
             }

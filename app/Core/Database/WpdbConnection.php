@@ -65,10 +65,53 @@ final class WpdbConnection
             'username' => $user,
             'password' => $password,
             'database' => $name,
+            // A name of its own: DB::build() replaces (and disconnects) any
+            // earlier connection of the same name, which would break a
+            // plugin's first wpdb when it makes a second one.
+            'name' => 'wpdb-'.bin2hex(random_bytes(8)),
         ]);
-        unset($config['name']);
 
         return new self(DB::build($config));
+    }
+
+    /**
+     * Whether this is Laravel's own connection to the site's database.
+     */
+    public function isShared(): bool
+    {
+        return $this->own === null;
+    }
+
+    /**
+     * The connection's character set and collation, from Laravel's settings.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public function charsetAndCollation(): array
+    {
+        $connection = $this->connection();
+
+        return [(string) $connection->getConfig('charset'), (string) $connection->getConfig('collation')];
+    }
+
+    /**
+     * Opens the connection again after it was lost. Laravel's own connection is
+     * only reopened outside a Laravel transaction, as Laravel itself does: a lost
+     * transaction cannot be continued.
+     */
+    public function reconnect(): bool
+    {
+        try {
+            if ($this->own !== null) {
+                $this->own->reconnect();
+            } elseif (DB::connection()->transactionLevel() === 0) {
+                DB::reconnect();
+            }
+        } catch (Throwable) {
+            return false;
+        }
+
+        return $this->ping();
     }
 
     /**
@@ -92,7 +135,14 @@ final class WpdbConnection
      */
     public function pdo(): PDO
     {
-        return $this->connection()->getPdo();
+        $connection = $this->connection();
+
+        // After Laravel's disconnect() the PDO is gone; open it again, as Laravel does before a query.
+        if ($connection->getRawPdo() === null) {
+            $connection->reconnect();
+        }
+
+        return $connection->getPdo();
     }
 
     /**
@@ -111,25 +161,53 @@ final class WpdbConnection
     {
         $this->lastError = '';
         $this->lastErrorNumber = 0;
+        $started = microtime(true);
 
         try {
-            $statement = $this->pdo()->query($sql);
-        } catch (PDOException $e) {
-            $this->recordError($e);
+            $pdo = $this->pdo();
+        } catch (Throwable $e) {
+            // No connection at all: report it as MySQL's "can't connect" (2002).
+            $this->lastErrorNumber = 2002;
+            $this->lastError = $e->getMessage();
 
             return false;
         }
 
-        if ($statement->columnCount() === 0) {
-            return new WpdbResult(isResultSet: false, affectedRows: $statement->rowCount());
+        // mysqli sends plain text queries and gets the server's own text back.
+        // PDO's default (native prepares) uses the binary protocol: an extra
+        // round trip per query, and DOUBLE values rounded by PHP. So wpdb's
+        // queries use emulated prepares and text results, then restore
+        // Laravel's settings. Stacked statements stay refused by the
+        // connection's MULTI_STATEMENTS option.
+        $emulate = $pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES);
+        $stringify = $pdo->getAttribute(PDO::ATTR_STRINGIFY_FETCHES);
+        $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, true);
+        $pdo->setAttribute(PDO::ATTR_STRINGIFY_FETCHES, true);
+
+        try {
+            $statement = $pdo->query($sql);
+
+            $result = $statement->columnCount() === 0
+                ? new WpdbResult(isResultSet: false, affectedRows: $statement->rowCount())
+                : new WpdbResult(
+                    isResultSet: true,
+                    rows: $this->rows($statement),
+                    columns: $this->columns($statement),
+                    affectedRows: $statement->rowCount(),
+                );
+        } catch (PDOException $e) {
+            $this->recordError($e);
+
+            return false;
+        } finally {
+            $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, $emulate);
+            $pdo->setAttribute(PDO::ATTR_STRINGIFY_FETCHES, $stringify);
         }
 
-        return new WpdbResult(
-            isResultSet: true,
-            rows: $this->rows($statement),
-            columns: $this->columns($statement),
-            affectedRows: $statement->rowCount(),
-        );
+        // Visible to DB::listen(), the query log and debugging tools, like Laravel's own queries.
+        $this->connection()->logQuery($sql, [], round((microtime(true) - $started) * 1000, 2));
+
+        return $result;
     }
 
     /**
@@ -182,12 +260,14 @@ final class WpdbConnection
         return $this->query($sql) !== false;
     }
 
+    /**
+     * Switches the connection's current database. On the shared connection
+     * this switches Laravel's too (recorded in docs/divergences.md).
+     */
     public function selectDatabase(string $name): bool
     {
-        if ($name === $this->connection()->getDatabaseName()) {
-            return true;
-        }
-
+        // Always switch: comparing with Laravel's configured name would skip
+        // switching back after an earlier switch away.
         return $this->query('USE `'.str_replace('`', '``', $name).'`') !== false;
     }
 

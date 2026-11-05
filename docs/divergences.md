@@ -9,12 +9,14 @@
 | | |
 |---|---|
 | **What WordPress does** | `$wpdb` connects with PHP's `mysqli` extension. `$wpdb->dbh` is a `mysqli` object. |
-| **What we do instead** | `$wpdb` uses Laravel's database connection, which is PDO. `$wpdb->dbh` is that `PDO` object, the same one Laravel uses, so WordPress and Laravel share one connection and one transaction. `$wpdb`'s own methods behave as in WordPress. |
+| **What we do instead** | `$wpdb` uses Laravel's database connection, which is PDO. For the site's database, `$wpdb->dbh` is always Laravel's current `PDO` object, opened on first use, so WordPress and Laravel share one connection and one transaction. `$wpdb`'s documented methods return what WordPress's do (values as strings, `null` for NULL, the same return values from `query()`), checked by WordPress's own database tests. Queries use the text protocol, as mysqli does. |
 | **Why** | One of everything (AGENTS.md rule 2). With two connections, a save through `$wpdb` and a save through Laravel could half-succeed. Owner's decision A, 2026-11-05. |
-| **Plugins it breaks** | Plugins that call `mysqli_*()` functions directly on `$wpdb->dbh` (for example `mysqli_real_escape_string( $wpdb->dbh, … )`, or `mysqli_insert_id( $wpdb->dbh )`). Rare: WordPress's documented API is `$wpdb`'s methods. |
-| **How they are fixed** | Use `$wpdb`'s methods instead: `$wpdb->prepare()` or `esc_sql()` for escaping, `$wpdb->insert_id`, `$wpdb->last_error`, `$wpdb->get_results()`. |
+| **What sharing one connection means** | **Transactions:** a plugin's `$wpdb->query( 'START TRANSACTION' )` inside Laravel's `DB::transaction()` makes MySQL commit Laravel's earlier writes, and Laravel's rollback then undoes nothing. The other way round, `DB::transaction()` while a plugin's raw transaction is open fails ("There is already an active transaction"). **Switching databases:** `$wpdb->select( 'other' )` switches Laravel's connection too, until switched back. **Charset:** `$wpdb->set_charset()` changes Laravel's connection charset too. **Closing:** `$wpdb->close()` detaches `$wpdb` but leaves Laravel's connection open. **Visibility:** `$wpdb`'s queries appear in `DB::listen()` and Laravel's query log, like Laravel's own. |
+| **Plugins it breaks** | Plugins that call `mysqli_*()` functions directly on `$wpdb->dbh` or `$wpdb->result` (for example `mysqli_real_escape_string( $wpdb->dbh, … )`, `mysqli_insert_id( $wpdb->dbh )`, `mysqli_fetch_assoc( $wpdb->result )`). Rare: WordPress's documented API is `$wpdb`'s methods. Plugins that run their own `START TRANSACTION` while Laravel code is mid-transaction (see above). |
+| **How they are fixed** | Use `$wpdb`'s methods instead: `$wpdb->prepare()` or `esc_sql()` for escaping, `$wpdb->insert_id`, `$wpdb->last_error`, `$wpdb->get_results()`. For transactions, a later step may route `$wpdb`'s `START TRANSACTION`/`COMMIT`/`ROLLBACK` through Laravel's transaction manager (owner's decision). |
+| **Not identical yet** | `$wpdb->get_col_info()` returns the column name, table, length, type and the main flags, but not every mysqli flag bit, the character-set number, or the original name behind an alias. |
 | **Implemented in** | `wp-api/classes/wpdb.php` (the `mysqli` calls replaced), `app/Core/Database/WpdbConnection.php`. |
-| **WordPress tests** | None diverge: WordPress's database tests only check that `$wpdb->dbh` exists and behaves as a property. Our behaviour is pinned by `tests/Feature/Core/Database/WpdbTest.php`. |
+| **WordPress tests** | None diverge: WordPress's database tests only check that `$wpdb->dbh` exists and behaves as a property. Our behaviour is pinned by `tests/Feature/Core/Database/WpdbTest.php` and `WpdbConnectionLifecycleTest.php`. |
 
 ## `WP_DEBUG_DISPLAY` is off by default
 

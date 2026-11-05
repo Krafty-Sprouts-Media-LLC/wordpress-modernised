@@ -89,7 +89,9 @@ abstract class WP_UnitTestCase extends TestCase
 
     public function tear_down()
     {
-        $this->run_sql('ROLLBACK');
+        // Roll back everything, even if a test committed on its own (Laravel
+        // only rolls back the PDO when it is still in a transaction).
+        DB::rollBack(0);
 
         $this->expected_deprecated = [];
         $this->caught_deprecated = [];
@@ -105,18 +107,28 @@ abstract class WP_UnitTestCase extends TestCase
      */
     public function start_transaction()
     {
-        $this->run_sql('SET autocommit = 0;');
-        $this->run_sql('START TRANSACTION;');
+        // WM: Laravel's transaction (WordPress runs SET autocommit = 0 and
+        // START TRANSACTION), so house code using DB::transaction() nests
+        // inside it as a savepoint.
+        DB::beginTransaction();
 
         add_filter('query', [$this, '_create_temporary_tables']);
         add_filter('query', [$this, '_drop_temporary_tables']);
     }
 
     /**
-     * Commits the current transaction.
+     * Commits the current transaction, and stays inside a new one, as
+     * WordPress's autocommit = 0 session does.
      */
     public static function commit_transaction()
     {
+        if (DB::transactionLevel() > 0) {
+            DB::commit();
+            DB::beginTransaction();
+
+            return;
+        }
+
         static::run_sql('COMMIT;');
     }
 

@@ -57,7 +57,7 @@ return [
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_520_ci'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'strict' => true,
+            'strict' => true, // Overridden by 'modes' below: Laravel uses the modes list when it is set.
             // WordPress's SQL modes: the server defaults minus the six wpdb::set_sql_mode()
             // removes (NO_ZERO_DATE, ONLY_FULL_GROUP_BY, STRICT_TRANS_TABLES, STRICT_ALL_TABLES,
             // TRADITIONAL, ANSI). One shared connection, so Laravel runs with them too.
@@ -85,7 +85,7 @@ return [
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_520_ci'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'strict' => true,
+            'strict' => true, // Overridden by 'modes' below: Laravel uses the modes list when it is set.
             // WordPress's SQL modes: the server defaults minus the six wpdb::set_sql_mode()
             // removes (NO_ZERO_DATE, ONLY_FULL_GROUP_BY, STRICT_TRANS_TABLES, STRICT_ALL_TABLES,
             // TRADITIONAL, ANSI). One shared connection, so Laravel runs with them too.
