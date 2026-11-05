@@ -203,7 +203,9 @@ final class WpdbConnection
         // only fails that statement. Inside a transaction, a savepoint per query
         // gives PostgreSQL MySQL's behaviour, so tolerated failures (common in
         // WordPress) don't break everything after them.
-        $savepoint = $this->isPostgres() && $pdo->inTransaction();
+        // A plugin's own transaction control (START TRANSACTION, COMMIT,
+        // SAVEPOINT …) runs as written: wrapping it would end or swallow it.
+        $savepoint = $this->isPostgres() && $pdo->inTransaction() && ! self::isTransactionControl($sql);
 
         try {
             if ($savepoint) {
@@ -212,16 +214,22 @@ final class WpdbConnection
 
             $statement = $pdo->query($sql);
 
-            if ($savepoint) {
+            if ($savepoint && $pdo->inTransaction()) {
                 $pdo->exec('RELEASE SAVEPOINT wm_wpdb');
             }
 
             if ($statement->columnCount() === 0) {
                 $result = new WpdbResult(isResultSet: false, affectedRows: $statement->rowCount());
             } else {
-                $columns = $this->columns($statement);
-                $rows = array_map(fn (stdClass $row) => $dialect->mapRow($row, $columns), $this->rows($statement));
-                $result = new WpdbResult(isResultSet: true, rows: $rows, columns: $dialect->mapColumns($columns), affectedRows: $statement->rowCount());
+                $rows = $this->rows($statement);
+                $tables = $rows === [] ? [] : $this->sourceTables($sql, $statement, array_keys(get_object_vars($rows[0])), $dialect->columnsNeedingTable());
+                $rows = array_map(fn (stdClass $row) => $dialect->mapRow($row, $tables), $rows);
+                $result = new WpdbResult(
+                    isResultSet: true,
+                    rows: $rows,
+                    columnsLoader: fn () => $dialect->mapColumns($this->columns($statement)),
+                    affectedRows: $statement->rowCount(),
+                );
             }
         } catch (PDOException $e) {
             if ($savepoint) {
@@ -244,6 +252,58 @@ final class WpdbConnection
         $this->connection()->logQuery($sql, [], round((microtime(true) - $started) * 1000, 2));
 
         return $result;
+    }
+
+    /**
+     * Whether $sql is transaction control (BEGIN, START TRANSACTION, COMMIT,
+     * ROLLBACK, SAVEPOINT, RELEASE, …), which must not run inside a savepoint.
+     */
+    private static function isTransactionControl(string $sql): bool
+    {
+        return preg_match('/^\s*(BEGIN|START\s+TRANSACTION|COMMIT|END|ROLLBACK|ABORT|SAVEPOINT|RELEASE|PREPARE\s+TRANSACTION)\b/i', $sql) === 1;
+    }
+
+    /**
+     * The table of a query that reads from exactly one table (one FROM, no
+     * JOIN, UNION or sub-select), or null.
+     */
+    private static function singleTable(string $sql): ?string
+    {
+        if (preg_match_all('/FROM/i', $sql) !== 1 || preg_match('/JOIN|UNION|\(\s*SELECT/i', $sql) === 1) {
+            return null;
+        }
+
+        $pattern = '/FROM\s+"?([A-Za-z0-9_]+)"?(?:\s+(?:AS\s+)?(?!WHERE|ORDER|GROUP|LIMIT|HAVING)[A-Za-z_]\w*)?\s*(?:WHERE|ORDER|GROUP|LIMIT|HAVING|;|$)/i';
+
+        return preg_match($pattern, $sql, $m) === 1 ? $m[1] : null;
+    }
+
+    /**
+     * The source table of each result column whose name is in $names, looked
+     * up only for those columns (column details cost a catalog lookup each on
+     * PostgreSQL). $columnNames are the result's names, in order.
+     *
+     * @param  list<string>  $columnNames
+     * @param  list<string>  $names
+     * @return array<string, string>
+     */
+    private function sourceTables(string $sql, PDOStatement $statement, array $columnNames, array $names): array
+    {
+        $tables = [];
+        $single = self::singleTable($sql);
+
+        foreach ($columnNames as $i => $name) {
+            if (in_array($name, $names, true)) {
+                // A one-table query names its table; otherwise ask PostgreSQL (costly).
+                $table = $single ?? (string) (($statement->getColumnMeta($i) ?: [])['table'] ?? '');
+
+                if ($table !== '') {
+                    $tables[$name] = $table;
+                }
+            }
+        }
+
+        return $tables;
     }
 
     /**
@@ -382,6 +442,43 @@ final class WpdbConnection
     }
 
     /**
+     * After an insert that gave its own value for a PostgreSQL table's
+     * auto-numbered column: moves the counter past that value (as MySQL's
+     * AUTO_INCREMENT does) and returns it, for $wpdb->insert_id. Null if the
+     * insert didn't set that column.
+     *
+     * @param  array<string, mixed>  $values  Inserted values, keyed by column name.
+     */
+    public function adoptExplicitId(string $table, array $values): ?int
+    {
+        if (! $this->isPostgres()) {
+            return null;
+        }
+
+        $dialect = $this->dialect();
+        $pdo = $this->pdo();
+        $autoNumbered = $dialect instanceof PostgresDialect ? $dialect->autoNumbered($pdo, $table) : null;
+
+        if ($autoNumbered === null) {
+            return null;
+        }
+
+        [$column, $sequence] = $autoNumbered;
+
+        foreach ($values as $name => $value) {
+            if (strtolower((string) $name) === $column && $value !== null && $value !== '') {
+                $id = (int) $value;
+                $quoted = $pdo->quote($sequence);
+                $pdo->query("SELECT setval({$quoted}, GREATEST({$id}, (SELECT last_value FROM {$sequence})))");
+
+                return $id;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * A PostgreSQL table's columns in the shape of MySQL's SHOW FULL COLUMNS,
      * for WordPress's charset and length checks. Text is UTF-8 (utf8mb4);
      * PostgreSQL's single text type is reported as MySQL's largest, longtext.
@@ -448,7 +545,10 @@ final class WpdbConnection
              JOIN pg_class c ON c.oid = i.indrelid
              CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
              JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum
-             WHERE c.relname = ? AND (i.indisunique OR i.indisprimary)
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE c.relname = ? AND n.nspname = current_schema()
+               AND (i.indisunique OR i.indisprimary)
+               AND i.indpred IS NULL AND NOT (0 = ANY (i.indkey))
              GROUP BY i.indexrelid'
         );
         $statement->execute([strtolower($table)]);

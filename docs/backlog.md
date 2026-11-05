@@ -28,6 +28,14 @@ None right now. Decided items move to the decisions table in `AGENTS.md`.
 | 11 | In the checker, Laravel's shutdown handler stays installed after its error handlers are removed; harmless except possibly a duplicate message on a fatal error. | `conformance/bootstrap.php` | Hooks review #10 |
 | 12 | `AGENTS.md` still says "nothing of the core is built yet". The checker's package name repeats the working name (one more thing to rename). | `AGENTS.md`, `conformance/composer.json` | Hooks review #12 |
 
+| 13 | Table and column names containing backticks: routing names through `quote_identifier()` now escapes them on MySQL too, where WordPress emits them raw. Safer, but unrecorded and not pinned by `WpdbMySqlDialectTest`. | `wp-api/classes/wpdb.php` (`_insert_replace_helper`, `update`, `delete`) | PostgreSQL review #14 |
+| 14 | Floats on PostgreSQL print PHP's way (`3.0`, `1.0E+20`, `INF`), not MySQL's (`3`, `1e20`). `bytea` values come back as a resource string instead of their bytes. | `app/Core/Database/WpdbConnection.php` (`rows()`) | PostgreSQL review #15 |
+| 15 | Schema-qualified inserts (`INSERT INTO public.wp_options`) give `insert_id` 0; the shaping takes the table prefix from config, not `$wpdb->prefix`; in a joined query with two columns of the same name, the column-detail lookup can pick the wrong one. | `wp-api/classes/wpdb.php`, `app/Core/Database/PostgresDialect.php`, `WpdbConnection::sourceTables()` | PostgreSQL review #17–#19 |
+| 16 | `WpdbTest::test_errors_are_reported_like_wordpress` only checks the table name on MySQL too; it could assert MySQL's exact "doesn't exist" message there. | `tests/Feature/Core/Database/WpdbTest.php` | PostgreSQL review #20 |
+| 17 | Notes for plugin authors writing raw SQL on PostgreSQL: jsonb's `?` operator must be written `??` (PDO treats `?` as a placeholder); regular expressions don't work on `wp_ci` columns. `conformance/diverged.php`'s header says adapted tests live in `conformance/adapted/`; the PostgreSQL entries point to app tests. The step-4 plan still says port 5432 (it's 5437). | docs | PostgreSQL review #21–#22 |
+| 18 | `composer.json` says PHP `^8.3`, but the locked packages need PHP 8.4.1 or newer, so the CI job on PHP 8.3 would fail at `composer install`. Either raise the minimum to 8.4 (owner's call) or pin packages that support 8.3. | `composer.json`, `composer.lock`, `.github/workflows/tests.yml` | PostgreSQL review (declined to judge) |
+| 19 | Later steps: WordPress core's own SQL must be written portably (no translator), e.g. `WP_Query`'s `LIMIT x, y`, `SQL_CALC_FOUND_ROWS`, meta queries' `REGEXP`. Each plan should budget for it. | future plans | PostgreSQL review (plan risk) |
+
 ## Known and accepted
 
 - Commit `e3f4b16` says "68 need wp_list_pluck()"; it was 60 errors plus 8 float-deprecation failures. History isn't rewritten for a message. (Hooks review #11.)

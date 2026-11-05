@@ -46,6 +46,120 @@ final class WpdbPostgresTest extends TestCase
         $this->assertNotNull($wpdb->get_var("SELECT to_regclass('{$wpdb->options}')"));
     }
 
+    public function test_the_deprecated_escape_door_is_postgresql_safe(): void
+    {
+        global $wpdb;
+
+        // Old plugins still pass request data through $wpdb->escape() (addslashes in WordPress).
+        $payload = "' UNION SELECT current_user::text COLLATE wp_ci --";
+        $wpdb->insert($wpdb->options, ['option_name' => 'wm_old', 'option_value' => 'kept', 'autoload' => 'off']);
+
+        $found = @$wpdb->get_col("SELECT option_value FROM {$wpdb->options} WHERE option_name = '".$wpdb->escape($payload)."'");
+        $this->assertSame([], $found);
+
+        $this->assertSame([], @$wpdb->get_col("SELECT option_value FROM {$wpdb->options} WHERE option_name = '".$wpdb->_weak_escape("x' OR option_name = option_name --")."'"));
+    }
+
+    public function test_escaping_holds_even_if_standard_strings_are_switched_off(): void
+    {
+        global $wpdb;
+
+        $wpdb->query('SET standard_conforming_strings = off');
+
+        try {
+            $value = "\\'; DROP TABLE wp_options; --";
+            $wpdb->insert($wpdb->options, ['option_name' => 'wm_scs', 'option_value' => $value, 'autoload' => 'off']);
+            $this->assertSame($value, $wpdb->get_var("SELECT option_value FROM {$wpdb->options} WHERE option_name = 'wm_scs'"));
+        } finally {
+            $wpdb->query('SET standard_conforming_strings = on');
+        }
+    }
+
+    public function test_backslash_then_placeholder_characters_are_not_corrupted(): void
+    {
+        global $wpdb;
+
+        $wpdb->insert($wpdb->options, ['option_name' => 'wm_a', 'option_value' => 'ends\\', 'autoload' => 'off']);
+        $wpdb->insert($wpdb->options, ['option_name' => 'wm_b', 'option_value' => 'has? :name', 'autoload' => 'off']);
+
+        $row = $wpdb->get_row("SELECT 'x\\' AS a, 'y? :name' AS b");
+        $this->assertSame('x\\', $row->a);
+        $this->assertSame('y? :name', $row->b);
+    }
+
+    public function test_identifier_placeholders_work(): void
+    {
+        global $wpdb;
+
+        $wpdb->insert($wpdb->options, ['option_name' => 'wm_i', 'option_value' => 'v', 'autoload' => 'off']);
+
+        $this->assertSame('v', $wpdb->get_var($wpdb->prepare('SELECT %i FROM %i WHERE %i = %s', 'option_value', $wpdb->options, 'option_name', 'wm_i')));
+    }
+
+    public function test_explicit_ids_set_insert_id_and_move_the_counter(): void
+    {
+        global $wpdb;
+
+        // The first insert into wp_posts in this session, inside the test's transaction.
+        $this->assertSame(1, $wpdb->insert($wpdb->posts, $this->postRow(['ID' => 500, 'post_title' => 'Imported'])));
+        $this->assertSame(500, $wpdb->insert_id);
+
+        $wpdb->insert($wpdb->posts, $this->postRow(['post_title' => 'Next']));
+        $this->assertGreaterThan(500, $wpdb->insert_id);
+
+        // The surrounding transaction is still usable.
+        $this->assertSame(2, (int) DB::table($wpdb->posts)->count());
+    }
+
+    public function test_plugin_tables_are_not_reshaped(): void
+    {
+        global $wpdb;
+
+        DB::statement("CREATE TABLE {$wpdb->prefix}myplugin (id bigserial PRIMARY KEY, post_date timestamp NULL, label text)");
+
+        $wpdb->insert($wpdb->prefix.'myplugin', ['label' => 'x']);
+        $this->assertGreaterThan(0, $wpdb->insert_id);
+
+        $row = $wpdb->get_row("SELECT * FROM {$wpdb->prefix}myplugin");
+        $this->assertObjectHasProperty('id', $row);
+        $this->assertNull($row->post_date);
+    }
+
+    public function test_empty_date_text_in_other_columns_is_kept(): void
+    {
+        global $wpdb;
+
+        $wpdb->insert($wpdb->options, ['option_name' => 'wm_zero', 'option_value' => '0000-00-00 00:00:00', 'autoload' => 'off']);
+
+        $this->assertSame('0000-00-00 00:00:00', $wpdb->get_var("SELECT option_value FROM {$wpdb->options} WHERE option_name = 'wm_zero'"));
+    }
+
+    public function test_replace_only_removes_rows_that_really_clash(): void
+    {
+        global $wpdb;
+
+        DB::statement("CREATE TABLE {$wpdb->prefix}wm_names (site int NOT NULL, name text NOT NULL, live boolean NOT NULL DEFAULT true)");
+        DB::statement("CREATE UNIQUE INDEX wm_names_site_lower ON {$wpdb->prefix}wm_names (site, lower(name))");
+        DB::statement("CREATE UNIQUE INDEX wm_names_live ON {$wpdb->prefix}wm_names (name) WHERE live");
+        DB::table($wpdb->prefix.'wm_names')->insert([['site' => 1, 'name' => 'a'], ['site' => 1, 'name' => 'b']]);
+
+        $wpdb->suppress_errors(true);
+        $wpdb->replace($wpdb->prefix.'wm_names', ['site' => 1, 'name' => 'c']);
+        $wpdb->suppress_errors(false);
+
+        $this->assertSame(['a', 'b', 'c'], DB::table($wpdb->prefix.'wm_names')->orderBy('name')->pluck('name')->all());
+    }
+
+    public function test_accents_compare_like_mysql(): void
+    {
+        global $wpdb;
+
+        // MySQL's utf8mb4_unicode_520_ci ignores accents as well as case.
+        $wpdb->insert($wpdb->posts, $this->postRow(['post_name' => 'café']));
+
+        $this->assertSame('1', $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_name = 'cafe'"));
+    }
+
     public function test_nul_bytes_are_removed_on_postgresql(): void
     {
         global $wpdb;

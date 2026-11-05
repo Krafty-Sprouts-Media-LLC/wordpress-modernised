@@ -14,19 +14,21 @@ use Throwable;
  */
 final class PostgresDialect implements Dialect
 {
-    /** WordPress's date columns: NULL on PostgreSQL, 0000-00-00 00:00:00 to plugins. */
-    private const DATE_COLUMNS = [
-        'post_date', 'post_date_gmt', 'post_modified', 'post_modified_gmt',
-        'comment_date', 'comment_date_gmt', 'user_registered', 'link_updated',
+    /**
+     * Per WordPress table (unprefixed): its mixed-case columns, stored lowercase
+     * on PostgreSQL, and its date columns, NULL on PostgreSQL but 0000-00-00 00:00:00 to plugins.
+     */
+    private const TABLE_RULES = [
+        'posts' => ['cased' => ['id' => 'ID'], 'dates' => ['post_date', 'post_date_gmt', 'post_modified', 'post_modified_gmt']],
+        'users' => ['cased' => ['id' => 'ID'], 'dates' => ['user_registered']],
+        'comments' => [
+            'cased' => ['comment_id' => 'comment_ID', 'comment_post_id' => 'comment_post_ID', 'comment_author_ip' => 'comment_author_IP'],
+            'dates' => ['comment_date', 'comment_date_gmt'],
+        ],
+        'links' => ['cased' => [], 'dates' => ['link_updated']],
     ];
 
-    /** WordPress's mixed-case columns, stored lowercase on PostgreSQL. */
-    private const CASED_COLUMNS = [
-        'id' => 'ID', 'comment_id' => 'comment_ID', 'comment_post_id' => 'comment_post_ID',
-        'comment_author_ip' => 'comment_author_IP',
-    ];
-
-    /** @var array<string, string|null> Identity sequence per table. */
+    /** @var array<string, array{0: string, 1: string}|null> Auto-numbered column and its sequence, per table. */
     private array $sequences = [];
 
     public function __construct(private readonly string $tablePrefix) {}
@@ -40,9 +42,10 @@ final class PostgresDialect implements Dialect
 
     public function escape(PDO $pdo, string $text): string
     {
-        // Standard strings: only the quote is doubled; backslash is an ordinary
-        // character. PostgreSQL text cannot hold NUL bytes, so they are removed.
-        return str_replace("'", "''", str_replace("\0", '', $text));
+        // libpq's own escaping (PQescapeStringConn) follows the connection's
+        // standard_conforming_strings, whichever way it is set. PostgreSQL text
+        // cannot hold NUL bytes, so they are removed first.
+        return substr($pdo->quote(str_replace("\0", '', $text)), 1, -1);
     }
 
     public function allowsEmulatedPrepares(): bool
@@ -57,44 +60,89 @@ final class PostgresDialect implements Dialect
 
     public function lastInsertId(PDO $pdo, ?string $table): int
     {
-        if ($table === null) {
+        $sequence = $table === null ? null : ($this->autoNumbered($pdo, $table)[1] ?? null);
+
+        if ($sequence === null) {
             return 0;
         }
 
-        $table = strtolower($table);
-
-        if (! array_key_exists($table, $this->sequences)) {
-            $this->sequences[$table] = $this->identitySequence($pdo, $table);
-        }
-
-        if ($this->sequences[$table] === null) {
-            return 0;
-        }
+        // currval() fails when this session hasn't used the sequence yet, and a
+        // failure would abort a surrounding transaction: ask inside a savepoint.
+        $nested = $pdo->inTransaction();
 
         try {
-            return (int) $pdo->query('SELECT currval('.$pdo->quote($this->sequences[$table]).')')->fetchColumn();
+            if ($nested) {
+                $pdo->exec('SAVEPOINT wm_currval');
+            }
+
+            $id = (int) $pdo->query('SELECT currval('.$pdo->quote($sequence).')')->fetchColumn();
+
+            if ($nested) {
+                $pdo->exec('RELEASE SAVEPOINT wm_currval');
+            }
+
+            return $id;
         } catch (Throwable) {
-            return 0; // No insert into this table yet in this session.
+            if ($nested) {
+                $pdo->exec('ROLLBACK TO SAVEPOINT wm_currval');
+            }
+
+            return 0;
         }
     }
 
-    public function mapRow(stdClass $row, array $columns): stdClass
+    /**
+     * The auto-numbered (identity or serial) column of $table and its sequence, if any.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    public function autoNumbered(PDO $pdo, string $table): ?array
+    {
+        $table = strtolower($table);
+
+        if (! array_key_exists($table, $this->sequences)) {
+            $statement = $pdo->prepare(
+                "SELECT a.attname, pg_get_serial_sequence(quote_ident(n.nspname) || '.' || quote_ident(c.relname), a.attname)
+                 FROM pg_class c
+                 JOIN pg_namespace n ON n.oid = c.relnamespace
+                 JOIN pg_attribute a ON a.attrelid = c.oid
+                 WHERE c.relname = ? AND n.nspname = current_schema() AND c.relkind = 'r'
+                   AND a.attnum > 0 AND NOT a.attisdropped
+                   AND pg_get_serial_sequence(quote_ident(n.nspname) || '.' || quote_ident(c.relname), a.attname) IS NOT NULL
+                 LIMIT 1"
+            );
+            $statement->execute([$table]);
+            $row = $statement->fetch(PDO::FETCH_NUM);
+
+            $this->sequences[$table] = $row ? [(string) $row[0], (string) $row[1]] : null;
+        }
+
+        return $this->sequences[$table];
+    }
+
+    public function columnsNeedingTable(): array
+    {
+        $names = [];
+
+        foreach (self::TABLE_RULES as $rules) {
+            $names = [...$names, ...array_keys($rules['cased']), ...$rules['dates']];
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    public function mapRow(stdClass $row, array $tablesByColumn): stdClass
     {
         $mapped = new stdClass;
 
         foreach (get_object_vars($row) as $name => $value) {
-            $table = $this->tableOf($columns, $name);
-            $isWordPressTable = $table !== null && str_starts_with($table, strtolower($this->tablePrefix));
+            $rules = $this->rulesFor($tablesByColumn[$name] ?? null);
 
-            if ($isWordPressTable && $value === null && in_array($name, self::DATE_COLUMNS, true)) {
+            if ($rules !== null && $value === null && in_array($name, $rules['dates'], true)) {
                 $value = '0000-00-00 00:00:00';
             }
 
-            if ($isWordPressTable && isset(self::CASED_COLUMNS[$name])) {
-                $name = self::CASED_COLUMNS[$name];
-            }
-
-            $mapped->$name = $value;
+            $mapped->{$rules['cased'][$name] ?? $name} = $value;
         }
 
         return $mapped;
@@ -103,11 +151,11 @@ final class PostgresDialect implements Dialect
     public function mapColumns(array $columns): array
     {
         return array_map(function (stdClass $column): stdClass {
-            $table = $column->table !== '' ? strtolower($column->table) : null;
+            $rules = $this->rulesFor($column->table !== '' ? $column->table : null);
 
-            if ($table !== null && str_starts_with($table, strtolower($this->tablePrefix)) && isset(self::CASED_COLUMNS[$column->name])) {
+            if ($rules !== null && isset($rules['cased'][$column->name])) {
                 $column = clone $column;
-                $column->name = $column->orgname = self::CASED_COLUMNS[$column->name];
+                $column->name = $column->orgname = $rules['cased'][$column->name];
             }
 
             return $column;
@@ -139,31 +187,23 @@ final class PostgresDialect implements Dialect
     }
 
     /**
-     * The table a result column came from (lowercase), if PostgreSQL says.
+     * The shaping rules for a result column's table: only WordPress's own tables, matched exactly.
      *
-     * @param  list<stdClass>  $columns
+     * @return array{cased: array<string, string>, dates: list<string>}|null
      */
-    private function tableOf(array $columns, string $name): ?string
+    private function rulesFor(?string $table): ?array
     {
-        foreach ($columns as $column) {
-            if ($column->name === $name) {
-                return $column->table !== '' ? strtolower($column->table) : null;
-            }
+        if ($table === null) {
+            return null;
         }
 
-        return null;
-    }
+        $prefix = strtolower($this->tablePrefix);
+        $table = strtolower($table);
 
-    private function identitySequence(PDO $pdo, string $table): ?string
-    {
-        $statement = $pdo->prepare(
-            "SELECT pg_get_serial_sequence(quote_ident(c.relname), a.attname)
-             FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
-             WHERE c.relname = ? AND c.relkind = 'r' AND a.attidentity <> '' LIMIT 1"
-        );
-        $statement->execute([$table]);
-        $sequence = $statement->fetchColumn();
+        if (! str_starts_with($table, $prefix)) {
+            return null;
+        }
 
-        return is_string($sequence) && $sequence !== '' ? $sequence : null;
+        return self::TABLE_RULES[substr($table, strlen($prefix))] ?? null;
     }
 }

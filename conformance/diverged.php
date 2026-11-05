@@ -27,5 +27,6 @@ return [
         'Tests_DB::test_prepare_with_placeholders_and_individual_args' => "Checks MySQL's backslash escaping in the SQL text; PostgreSQL doubles the quote instead (tests/Feature/Core/Database/WpdbPostgresTest).",
         'Tests_DB::test_prepare_with_placeholders_and_array_args' => "Checks MySQL's backslash escaping in the SQL text; PostgreSQL doubles the quote instead (tests/Feature/Core/Database/WpdbPostgresTest).",
         'Tests_DB::test_empty_where_on_update' => 'Checks the SQL text for MySQL backticks; PostgreSQL quotes names with double quotes.',
+        'Tests_DB::test_prepare_should_respect_the_allow_unsafe_unquoted_parameters_property' => "Checks %i's MySQL backticks in the SQL text; on PostgreSQL %i uses double quotes (WpdbPostgresTest::test_identifier_placeholders_work).",
     ],
 ];

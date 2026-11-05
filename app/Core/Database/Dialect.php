@@ -44,11 +44,19 @@ interface Dialect
     public function lastInsertId(PDO $pdo, ?string $table): int;
 
     /**
+     * Column names whose source table must be known to shape a row (fetching
+     * column details is costly on PostgreSQL, so only these are looked up).
+     *
+     * @return list<string>
+     */
+    public function columnsNeedingTable(): array;
+
+    /**
      * Shapes a result row the way WordPress's mysqli rows look.
      *
-     * @param  list<stdClass>  $columns  Column details, in mysqli_fetch_field()'s shape.
+     * @param  array<string, string>  $tablesByColumn  Source table of the columns listed by columnsNeedingTable().
      */
-    public function mapRow(stdClass $row, array $columns): stdClass;
+    public function mapRow(stdClass $row, array $tablesByColumn): stdClass;
 
     /**
      * Shapes column details (from mysqli_fetch_field()'s shape) the way

@@ -39,7 +39,12 @@ final class MySqlDialect implements Dialect
         return (int) $pdo->lastInsertId();
     }
 
-    public function mapRow(stdClass $row, array $columns): stdClass
+    public function columnsNeedingTable(): array
+    {
+        return [];
+    }
+
+    public function mapRow(stdClass $row, array $tablesByColumn): stdClass
     {
         return $row;
     }

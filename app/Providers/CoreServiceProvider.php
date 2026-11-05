@@ -8,6 +8,7 @@ use App\Core\Hooks\HookBus;
 use App\Core\Hooks\WordPressErrors;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
+use RuntimeException;
 use wpdb;
 
 /**
@@ -42,6 +43,16 @@ final class CoreServiceProvider extends ServiceProvider
     }
 
     /**
+     * Whether this PHP version can use PostgreSQL safely. Before 8.4, PDO's own
+     * SQL scanner reads \' inside a string as an escaped quote, so a value ending
+     * in a backslash followed by one containing ? or :name is silently corrupted.
+     */
+    public static function supportsPostgres(int $phpVersionId): bool
+    {
+        return $phpVersionId >= 80400;
+    }
+
+    /**
      * Defines WordPress's database settings from Laravel's, and creates the
      * global $wpdb on Laravel's connection, as wp-settings.php does with
      * require_wp_db() and wp_set_wpdb_vars(). Each boot gets a fresh $wpdb, so
@@ -53,6 +64,10 @@ final class CoreServiceProvider extends ServiceProvider
 
         if (! in_array($config['driver'] ?? null, ['mysql', 'mariadb', 'pgsql'], true)) {
             return;
+        }
+
+        if ($config['driver'] === 'pgsql' && ! self::supportsPostgres(PHP_VERSION_ID)) {
+            throw new RuntimeException('PostgreSQL needs PHP 8.4 or newer: PHP 8.3 can silently corrupt some queries (docs/divergences.md).');
         }
 
         foreach ([

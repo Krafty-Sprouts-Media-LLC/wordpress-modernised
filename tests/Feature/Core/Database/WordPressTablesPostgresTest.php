@@ -55,19 +55,17 @@ final class WordPressTablesPostgresTest extends TestCase
 
     public function test_text_compares_without_case_like_mysql(): void
     {
+        DB::table('wp_posts')->insert($this->postRow(['post_name' => 'hello', 'post_title' => 'Hello world']));
+
+        $this->assertSame(1, DB::table('wp_posts')->where('post_name', 'Hello')->count());
+        $this->assertSame(1, DB::table('wp_posts')->where('post_title', 'like', 'hel%')->count());
+
+        // A second option differing only in case is refused, as in MySQL.
         DB::table('wp_options')->insert(['option_name' => 'Foo', 'option_value' => '1', 'autoload' => 'off']);
-
-        $this->expectException(QueryException::class);
-
-        try {
-            DB::table('wp_posts')->insert($this->postRow(['post_name' => 'hello', 'post_title' => 'Hello world']));
-
-            $this->assertSame(1, DB::table('wp_posts')->where('post_name', 'Hello')->count());
-            $this->assertSame(1, DB::table('wp_posts')->where('post_title', 'like', 'hel%')->count());
-        } finally {
-            // The duplicate option, differing only in case, must be refused.
-            DB::table('wp_options')->insert(['option_name' => 'foo', 'option_value' => '2', 'autoload' => 'off']);
-        }
+        $this->assertThrows(
+            fn () => DB::transaction(fn () => DB::table('wp_options')->insert(['option_name' => 'foo', 'option_value' => '2', 'autoload' => 'off'])),
+            QueryException::class,
+        );
     }
 
     public function test_empty_dates_are_null(): void

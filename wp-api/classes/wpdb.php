@@ -1427,6 +1427,12 @@ class wpdb
             _deprecated_function(__METHOD__, '3.6.0', 'wpdb::prepare() or esc_sql()');
         }
 
+        // WM: addslashes() is only MySQL-safe; on PostgreSQL a backslash doesn't
+        // escape a quote, so escape the way the database expects.
+        if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            return $this->wm_connection()->escape((string) $data);
+        }
+
         return addslashes($data);
     }
 
@@ -1579,6 +1585,11 @@ class wpdb
      */
     private function _escape_identifier_value($identifier)
     {
+        // WM: PostgreSQL doubles double quotes (and stores names lowercase).
+        if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            return str_replace('"', '""', strtolower((string) $identifier));
+        }
+
         return str_replace('`', '``', $identifier);
     }
 
@@ -1763,7 +1774,9 @@ class wpdb
                 }
 
                 if ($type === 'i') {
-                    $placeholder = '`%'.$format.'s`';
+                    // WM: PostgreSQL quotes identifiers with double quotes.
+                    $quote = ($this->wm_connection() && $this->wm_connection()->isPostgres()) ? '"' : '`';
+                    $placeholder = $quote.'%'.$format.'s'.$quote;
                     // Using a simple strpos() due to previous checking (e.g. $allowed_format).
                     $argnum_pos = strpos($format, '$');
 
@@ -2846,7 +2859,19 @@ class wpdb
 
         $this->check_current_query = false;
 
-        return $this->query($this->prepare($sql, $values));
+        $result = $this->query($this->prepare($sql, $values));
+
+        // WM: on PostgreSQL, an insert that gives its own ID sets insert_id to it
+        // and moves the table's counter past it, as MySQL's AUTO_INCREMENT does.
+        if ($result !== false && $this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            $explicit = $this->wm_connection()->adoptExplicitId($table, array_combine(array_keys($data), array_column($data, 'value')));
+
+            if ($explicit !== null) {
+                $this->insert_id = $explicit;
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -3155,10 +3180,16 @@ class wpdb
             return false;
         }
 
-        // WM: PostgreSQL has no 0000-00-00 dates; WordPress's empty date is stored as NULL.
+        // WM: PostgreSQL has no 0000-00-00 dates; in date columns, WordPress's
+        // empty date is stored as NULL. Other columns keep the text as given.
         if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            $this->get_table_charset($table);
+            $columns = $this->col_meta[strtolower($table)] ?? [];
+
             foreach ($data as $field => $value) {
-                if ($value['value'] === '0000-00-00 00:00:00') {
+                $isDate = isset($columns[strtolower($field)]) && $columns[strtolower($field)]->Type === 'datetime';
+
+                if ($isDate && $value['value'] === '0000-00-00 00:00:00') {
                     $data[$field]['value'] = null;
                 }
             }
@@ -4351,7 +4382,7 @@ class wpdb
         }
 
         if ($this->result instanceof WpdbResult) {
-            $this->col_info = $this->result->columns;
+            $this->col_info = $this->result->columns();
         }
     }
 

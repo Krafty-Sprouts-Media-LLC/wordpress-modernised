@@ -11,13 +11,23 @@ use Illuminate\Support\Facades\DB;
  */
 return new class extends Migration
 {
+    /** ICU: compare at the base-letter level, ignoring case and accents. */
+    private const COLLATION_LOCALE = 'und-u-ks-level1';
+
     public function up(): void
     {
         $connection = DB::connection();
 
         if ($connection->getDriverName() === 'pgsql') {
-            // Text compared without case, as MySQL's _ci collations do (PostgreSQL 18+ for LIKE).
-            DB::statement("CREATE COLLATION IF NOT EXISTS wp_ci (provider = icu, locale = 'und-u-ks-level2', deterministic = false)");
+            // Text compared without case or accents, as MySQL's utf8mb4_unicode_520_ci
+            // does (PostgreSQL 18+ for LIKE). An older definition is replaced; that
+            // fails safely (PostgreSQL refuses) if tables still use it.
+            $locale = DB::scalar("SELECT colllocale FROM pg_collation WHERE collname = 'wp_ci'");
+
+            if ($locale !== self::COLLATION_LOCALE) {
+                DB::statement('DROP COLLATION IF EXISTS wp_ci');
+                DB::statement("CREATE COLLATION wp_ci (provider = icu, locale = '".self::COLLATION_LOCALE."', deterministic = false)");
+            }
 
             foreach (WordPressSchema::postgresStatements($this->prefix()) as $statements) {
                 foreach ($statements as $statement) {
