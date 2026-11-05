@@ -13,6 +13,9 @@
         </testsuite>
         <testsuite name="wordpress">
             <!-- WordPress 7.1.4's own tests, run unmodified. Added area by area. -->
+            <file>wordpress-develop/tests/phpunit/tests/actions.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/filters.php</file>
+            <directory suffix=".php">wordpress-develop/tests/phpunit/tests/hooks</directory>
         </testsuite>
     </testsuites>
 </phpunit>

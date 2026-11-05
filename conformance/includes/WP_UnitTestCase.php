@@ -35,6 +35,15 @@ abstract class WP_UnitTestCase extends TestCase
 
     public function set_up()
     {
+        static $waiting = null;
+        $waiting ??= require dirname(__DIR__).'/waiting.php';
+
+        $key = static::class.'::'.$this->getName(false);
+
+        if (isset($waiting[$key])) {
+            $this->markTestSkipped('Waiting: '.$waiting[$key]);
+        }
+
         if (! self::$hooks_saved) {
             $this->_backup_hooks();
         }
