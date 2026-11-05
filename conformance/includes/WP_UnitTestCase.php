@@ -8,7 +8,6 @@
  * Contains code from WordPress 7.1.4: tests/phpunit/includes/abstract-testcase.php.
  */
 
-use Illuminate\Support\Facades\DB;
 use PHPUnit\Util\Test;
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
@@ -56,6 +55,36 @@ abstract class WP_UnitTestCase extends TestCase
 
         $this->start_transaction();
         $this->expectDeprecated();
+        add_filter('wp_die_handler', [$this, 'get_wp_die_handler']);
+    }
+
+    /**
+     * Returns the wp_die() handler used in tests.
+     */
+    public function get_wp_die_handler($handler)
+    {
+        return [$this, 'wp_die_handler'];
+    }
+
+    /**
+     * Throws WPDieException instead of stopping, so tests can catch wp_die().
+     */
+    public function wp_die_handler($message, $title, $args)
+    {
+        if (is_wp_error($message)) {
+            $message = $message->get_error_message();
+        }
+
+        if (! is_scalar($message)) {
+            $message = '0';
+        }
+
+        $code = 0;
+        if (isset($args['response'])) {
+            $code = $args['response'];
+        }
+
+        throw new WPDieException($message, $code);
     }
 
     public function tear_down()
@@ -116,12 +145,13 @@ abstract class WP_UnitTestCase extends TestCase
     }
 
     /**
-     * Runs one SQL statement on the shared connection. Stand-in until $wpdb
-     * exists; then it runs through $wpdb->query(), as WordPress's own does.
+     * Runs one SQL statement through $wpdb, as WordPress's own test case does.
      */
     protected static function run_sql(string $sql): void
     {
-        DB::connection()->getPdo()->exec($sql);
+        global $wpdb;
+
+        $wpdb->query($sql);
     }
 
     protected function assert_post_conditions()

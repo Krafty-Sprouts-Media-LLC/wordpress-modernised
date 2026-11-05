@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Artisan;
  */
 define('CHECKER_STARTED_AT', time());
 define('WP_DEBUG', true);
+// WordPress's test configuration shows errors (its default); the app defaults this to off (docs/divergences.md).
+define('WP_DEBUG_DISPLAY', true);
 define('WP_TESTS_CHECKOUT', __DIR__.'/wordpress-develop');
 
 $root = dirname(__DIR__);
@@ -71,5 +73,7 @@ require __DIR__.'/includes/stand-ins.php';
 
 require WP_TESTS_CHECKOUT.'/tests/phpunit/includes/utils.php';
 require WP_TESTS_CHECKOUT.'/tests/phpunit/includes/mock-invokable.php';
+require WP_TESTS_CHECKOUT.'/tests/phpunit/includes/phpunit6/compat.php';
+require WP_TESTS_CHECKOUT.'/tests/phpunit/includes/exceptions.php';
 
 require __DIR__.'/includes/WP_UnitTestCase.php';

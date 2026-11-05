@@ -19,7 +19,7 @@
 | `declare(strict_types=1)` | **Never.** Strict types would make the doors reject calls that WordPress accepts, such as `"10"` passed where a number is expected | **Always** |
 | Docblocks | Full: see section 3 | Short: see section 4 |
 
-A door does as little as it can: it checks and shapes its input the way WordPress does, then hands the work to a service in `app/Core/<Area>/`.
+A door does as little as it can: it checks and shapes its input the way WordPress does, then hands the work to a service in `app/Core/<Area>/`. **Doors call the house, never Laravel directly:** code in `wp-api/` may use `App\Core\...` classes, but never `Illuminate\...`. Laravel stays behind the house services.
 
 ## 3. Docblocks on the doors
 

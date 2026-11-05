@@ -22,6 +22,9 @@
             <file>wordpress-develop/tests/phpunit/tests/functions/wpListSort.php</file>
             <file>wordpress-develop/tests/phpunit/tests/functions/wpFilterObjectList.php</file>
             <file>wordpress-develop/tests/phpunit/tests/functions/wpTriggerError.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/db.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/db/realEscape.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/db/charset.php</file>
         </testsuite>
         <testsuite name="adapted">
             <!-- WordPress tests adapted after a recorded divergence (docs/divergences.md). -->

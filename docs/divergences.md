@@ -2,6 +2,45 @@
 
 **In plain words:** every place where we deliberately behave differently from WordPress is listed here, with which plugins it affects and how they get fixed (AGENTS.md rule 4). WordPress's tests for these behaviours are skipped as "diverged on purpose" (`conformance/diverged.php`), and tests describing our behaviour live in `conformance/adapted/`.
 
+## `$wpdb->dbh` is a PDO connection, not mysqli
+
+**Since:** WM-0.2.0
+
+| | |
+|---|---|
+| **What WordPress does** | `$wpdb` connects with PHP's `mysqli` extension. `$wpdb->dbh` is a `mysqli` object. |
+| **What we do instead** | `$wpdb` uses Laravel's database connection, which is PDO. `$wpdb->dbh` is that `PDO` object, the same one Laravel uses, so WordPress and Laravel share one connection and one transaction. `$wpdb`'s own methods behave as in WordPress. |
+| **Why** | One of everything (AGENTS.md rule 2). With two connections, a save through `$wpdb` and a save through Laravel could half-succeed. Owner's decision A, 2026-11-05. |
+| **Plugins it breaks** | Plugins that call `mysqli_*()` functions directly on `$wpdb->dbh` (for example `mysqli_real_escape_string( $wpdb->dbh, … )`, or `mysqli_insert_id( $wpdb->dbh )`). Rare: WordPress's documented API is `$wpdb`'s methods. |
+| **How they are fixed** | Use `$wpdb`'s methods instead: `$wpdb->prepare()` or `esc_sql()` for escaping, `$wpdb->insert_id`, `$wpdb->last_error`, `$wpdb->get_results()`. |
+| **Implemented in** | `wp-api/classes/wpdb.php` (the `mysqli` calls replaced), `app/Core/Database/WpdbConnection.php`. |
+| **WordPress tests** | None diverge: WordPress's database tests only check that `$wpdb->dbh` exists and behaves as a property. Our behaviour is pinned by `tests/Feature/Core/Database/WpdbTest.php`. |
+
+## `WP_DEBUG_DISPLAY` is off by default
+
+**Since:** WM-0.2.0
+
+| | |
+|---|---|
+| **What WordPress does** | `WP_DEBUG_DISPLAY` defaults to `true`: with `WP_DEBUG` on, errors (including database errors from `$wpdb`) are printed into the page. |
+| **What we do instead** | It defaults to `false`; set `WP_DEBUG_DISPLAY=true` in `.env` (`config/wordpress.php`) to get WordPress's behaviour. Database errors still go to the error log. |
+| **Why** | Laravel shows errors through its own error pages. Printed database errors leak query details into pages and API responses. |
+| **Plugins it breaks** | None in behaviour. Developers who relied on seeing database errors in the page set it to `true`. |
+| **How they are fixed** | `WP_DEBUG_DISPLAY=true` in `.env`. |
+| **WordPress tests** | None diverge: the checker runs with WordPress's test configuration (`WP_DEBUG_DISPLAY` on). |
+
+## Minimum PHP is 8.3
+
+**Since:** WM-0.2.0
+
+| | |
+|---|---|
+| **What WordPress does** | `$required_php_version` is `7.4`. |
+| **What we do instead** | `8.3`, Laravel 13's minimum. |
+| **Why** | Laravel owns the runtime (AGENTS.md rule 2). |
+| **Plugins it breaks** | Plugins that only run on PHP older than 8.3. WordPress itself supports 8.3+, so plugins maintained for current WordPress are unaffected. |
+| **How they are fixed** | Update the plugin to PHP 8.3, or use a maintained version. |
+
 ## wp_trigger_error() notices
 
 **Since:** WM-0.1.0

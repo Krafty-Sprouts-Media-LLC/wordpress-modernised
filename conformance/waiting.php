@@ -11,4 +11,7 @@
  */
 return [
     'Tests_Filters::test_other_priority' => 'Needs WordPress default filters (the_content). Arrives with the default-filters step.',
+    'Tests_DB::test_get_col' => 'Needs the default admin user a WordPress install creates. Arrives with the logins step.',
+    'Tests_DB::test_db_reconnect' => 'Needs the default admin user a WordPress install creates. Arrives with the logins step.',
+    'Tests_DB::test_mysqli_flush_sync' => "Needs WordPress's post factory and wp_delete_post(). Arrives with the posts step.",
 ];
