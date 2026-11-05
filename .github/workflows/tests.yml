@@ -1,0 +1,49 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  tests:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.5']
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Cache WordPress tests
+        uses: actions/cache@v6
+        with:
+          path: conformance/wordpress-develop
+          key: wordpress-develop-7.1.4
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+
+      - name: Check code style
+        run: vendor/bin/pint --test
+
+      - name: Prepare environment
+        run: cp .env.example .env && php artisan key:generate
+
+      - name: App tests
+        run: php artisan test
+
+      - name: Fetch WordPress tests
+        run: composer conformance:fetch
+
+      - name: WordPress checker
+        run: composer conformance
