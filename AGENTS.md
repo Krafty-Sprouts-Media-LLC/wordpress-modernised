@@ -25,7 +25,8 @@ We take things from WordPress only when we choose to: mainly security fixes for 
 |---|---|
 | Licence | **GPL-2.0-or-later** (required for WordPress-derived code; Laravel's MIT licence is compatible) |
 | Runtime | **Laravel owns the runtime.** The WordPress API is a layer on top of it |
-| Database | One database layer on Laravel's connection. **MySQL/MariaDB first** (what plugins expect), **PostgreSQL proven early**. Plugins' raw MySQL queries go through a translator, or the plugin gets fixed |
+| Compatibility | **API-level** (rule 3): WordPress's functions, hooks, classes, REST API and `$wpdb`'s methods work unchanged. The tables and stored formats behind them can be redesigned, one recorded change at a time. Plugins' own MySQL-flavoured SQL is not translated for other databases |
+| Database | One database layer on Laravel's connection. **MySQL/MariaDB first** (what plugins expect), **PostgreSQL proven early**. `$wpdb`'s methods work on both; plugins' own MySQL-flavoured SQL is not translated, so those plugins get fixed (rule 3) |
 | Database connection | **One connection, Laravel's.** `$wpdb->dbh` is Laravel's PDO. WordPress's 12 single-site tables are kept as they are; table design changes come later, one at a time. No multisite for now. No Laravel `users` table: `wp_users` is the one user table |
 | SQL modes | **WordPress's relaxed MySQL modes for the whole connection** (Laravel's code included), until WordPress's `0000-00-00` empty dates are replaced; then strict mode returns |
 | Defaults | `WP_DEBUG_DISPLAY` **off** by default (WordPress: on); minimum PHP **8.3** (WordPress: 7.4). Both recorded in `docs/divergences.md` |
@@ -45,7 +46,7 @@ We take things from WordPress only when we choose to: mainly security fixes for 
 
 2. **Laravel owns the runtime; the WordPress API is a layer.** There is one of everything: one container, one database connection, one cache, one queue, one auth system, one request lifecycle, one hook engine. A WordPress function never keeps its own separate copy of state that Laravel also holds. If `get_option()` and Eloquent can both read an option, they go through the same connection and the same cache.
 
-3. **The compatibility promise covers documented behaviour only.** Plugins and themes that use WordPress's documented functions, hooks, classes and REST API run unchanged. Undocumented internals are ours to rebuild the Laravel way. Plugins that depend on undocumented behaviour, or on a fault we fix, get fixed copies.
+3. **The compatibility promise is API-level.** Plugins and themes that use WordPress's documented API run unchanged: its functions, hooks, classes, REST API and `$wpdb`'s methods. **The database layout behind the API is not promised.** Tables, columns, stored formats (such as PHP-serialized values) and other internals are ours to redesign the Laravel way, each change recorded with its plugin cost (rule 4). Plugins that write their own SQL against WordPress's tables, or depend on internals or on a fault we fix, get fixed copies. Owner's decision, 2026-11-05.
 
 4. **Every deliberate difference from WordPress is recorded.** `docs/divergences.md` says what WordPress does, what we do instead, why, which plugins it breaks, and how they are fixed. No silent differences.
 
