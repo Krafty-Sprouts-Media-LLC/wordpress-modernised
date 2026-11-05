@@ -293,7 +293,7 @@ final class WpdbConnection
      */
     private static function sameDatabase(array $config, string $host, ?int $port, string $user, string $name): bool
     {
-        return in_array($config['driver'] ?? null, ['mysql', 'mariadb'], true)
+        return in_array($config['driver'] ?? null, ['mysql', 'mariadb', 'pgsql'], true)
             && ($config['host'] ?? null) === $host
             && ($port === null || (int) ($config['port'] ?? 3306) === $port)
             && ($config['username'] ?? null) === $user

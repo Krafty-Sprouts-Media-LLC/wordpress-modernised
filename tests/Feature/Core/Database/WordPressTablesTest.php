@@ -26,6 +26,10 @@ final class WordPressTablesTest extends TestCase
 
     public function test_tables_match_wordpress_7_1_4(): void
     {
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $this->markTestSkipped("Compares against WordPress's MySQL table definitions; PostgreSQL's mapping is checked by WordPressTablesPostgresTest.");
+        }
+
         DB::statement('DROP DATABASE IF EXISTS '.self::REFERENCE);
         DB::statement('CREATE DATABASE '.self::REFERENCE);
 

@@ -1,5 +1,5 @@
 # Local databases for development and tests: docker compose up -d --wait
-# MySQL is the default (port 3306); MariaDB runs beside it (port 3307).
+# MySQL is the default (port 3306); MariaDB (port 3307) and PostgreSQL (port 5437) run beside it.
 services:
   mysql:
     image: mysql:9.7
@@ -37,6 +37,24 @@ services:
       timeout: 5s
       retries: 30
 
+  postgres:
+    image: postgres:18
+    ports:
+      - "5437:5432"
+    environment:
+      POSTGRES_USER: wordpress
+      POSTGRES_PASSWORD: wordpress
+      POSTGRES_DB: wordpress
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./compose/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "wordpress", "-d", "wordpress"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
 volumes:
   mysql-data:
   mariadb-data:
+  postgres-data:

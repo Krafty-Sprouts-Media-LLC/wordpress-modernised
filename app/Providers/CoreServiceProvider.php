@@ -51,7 +51,7 @@ final class CoreServiceProvider extends ServiceProvider
     {
         $config = DB::connection()->getConfig();
 
-        if (! in_array($config['driver'] ?? null, ['mysql', 'mariadb'], true)) {
+        if (! in_array($config['driver'] ?? null, ['mysql', 'mariadb', 'pgsql'], true)) {
             return;
         }
 
