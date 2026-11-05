@@ -9,6 +9,7 @@
 | `wp_kses()` | `wp-api/interim/kses.php` | Keeps allowed tags but does not filter attributes or URL protocols. Only `wp_trigger_error()` uses it, on its own messages | The HTML-filtering (kses) step |
 | `WP_Post` | `conformance/includes/stand-ins.php` (checker only) | Copies fields onto itself; no behaviour | The posts step |
 | `wpdb` | `conformance/includes/stand-ins.php` (checker only) | Empty class. WordPress's test utilities declare a class extending it | The database step |
+| No login system | `config/auth.php` | Laravel's own `users` table, `User` model and password resets are removed; WordPress's `wp_users` is the one user table, but nothing logs in yet | The logins step |
 
 ## Known clash: `__()`
 

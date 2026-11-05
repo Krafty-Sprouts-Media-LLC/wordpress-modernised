@@ -1,7 +1,5 @@
 <?php
 
-use App\Models\User;
-
 return [
 
     /*
@@ -62,15 +60,12 @@ return [
     */
 
     'providers' => [
+        // No login system yet: WordPress's wp_users is the one user table, and
+        // logins arrive in their own step (docs/stand-ins.md).
         'users' => [
-            'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', User::class),
+            'driver' => 'database',
+            'table' => null,
         ],
-
-        // 'users' => [
-        //     'driver' => 'database',
-        //     'table' => 'users',
-        // ],
     ],
 
     /*
