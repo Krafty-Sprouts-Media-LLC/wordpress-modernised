@@ -219,6 +219,32 @@ abstract class WP_UnitTestCase extends TestCase
     }
 
     /**
+     * Asserts two arrays hold equal values (loose comparison), in any order.
+     */
+    public function assertEqualSets($expected, $actual, $message = '')
+    {
+        $this->assertIsArray($expected, $message.' Expected value must be an array.');
+        $this->assertIsArray($actual, $message.' Value under test is not an array.');
+
+        sort($expected);
+        sort($actual);
+        $this->assertEquals($expected, $actual, $message);
+    }
+
+    /**
+     * Asserts two arrays hold equal keys and values (loose comparison), in any order.
+     */
+    public function assertEqualSetsWithIndex($expected, $actual, $message = '')
+    {
+        $this->assertIsArray($expected, $message.' Expected value must be an array.');
+        $this->assertIsArray($actual, $message.' Value under test is not an array.');
+
+        ksort($expected);
+        ksort($actual);
+        $this->assertEquals($expected, $actual, $message);
+    }
+
+    /**
      * Asserts two arrays hold the same values, in any order.
      */
     public function assertSameSets($expected, $actual, $message = '')

@@ -42,6 +42,13 @@ if (! defined('WM_WP_API_LOADED') && is_file($root.'/wp-api/load.php')) {
 $app = require $root.'/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 
+// Laravel's bootstrap installs its own error and exception handlers, which turn
+// PHP notices into exceptions and send deprecations to its log. PHPUnit 9 only
+// installs its handler when none is set, so give error handling back to PHP and
+// PHPUnit, as in WordPress's own test environment.
+restore_error_handler();
+restore_exception_handler();
+
 // Stand-ins first: WordPress's utils.php declares a class that extends wpdb.
 require __DIR__.'/includes/stand-ins.php';
 

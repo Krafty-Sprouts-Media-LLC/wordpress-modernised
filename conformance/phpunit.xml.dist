@@ -16,6 +16,11 @@
             <file>wordpress-develop/tests/phpunit/tests/actions.php</file>
             <file>wordpress-develop/tests/phpunit/tests/filters.php</file>
             <directory suffix=".php">wordpress-develop/tests/phpunit/tests/hooks</directory>
+            <file>wordpress-develop/tests/phpunit/tests/functions/wpListPluck.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/wpListUtil.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/wpListFilter.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/wpListSort.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/wpFilterObjectList.php</file>
         </testsuite>
     </testsuites>
 </phpunit>
