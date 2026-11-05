@@ -1092,11 +1092,17 @@ class wpdb
      * @since WM-0.2.0
      * @since WP-3.9.0
      * @since WM-0.2.0 Changed: runs on Laravel's database connection (PDO) instead of mysqli. See docs/divergences.md.
+     * @since WM-0.3.0 Changed: on PostgreSQL there are no SQL modes to set.
      *
      * @param  array  $modes  Optional. A list of SQL modes to set. Default empty array.
      */
     public function set_sql_mode($modes = [])
     {
+        // WM: SQL modes are MySQL's; PostgreSQL has none to set.
+        if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            return;
+        }
+
         if (empty($modes)) {
             $res = $this->wm_connection()->query('SELECT @@SESSION.sql_mode');
 
@@ -1421,6 +1427,12 @@ class wpdb
             _deprecated_function(__METHOD__, '3.6.0', 'wpdb::prepare() or esc_sql()');
         }
 
+        // WM: addslashes() is only MySQL-safe; on PostgreSQL a backslash doesn't
+        // escape a quote, so escape the way the database expects.
+        if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            return $this->wm_connection()->escape((string) $data);
+        }
+
         return addslashes($data);
     }
 
@@ -1542,12 +1554,18 @@ class wpdb
      *
      * @since WM-0.2.0
      * @since WP-6.2.0
+     * @since WM-0.3.0 Changed: on PostgreSQL, names are double-quoted and lowercased (PostgreSQL stores WordPress's names lowercase).
      *
      * @param  string  $identifier  Identifier to escape.
      * @return string Escaped identifier.
      */
     public function quote_identifier($identifier)
     {
+        // WM: PostgreSQL quotes and lowercases names (docs/divergences.md); MySQL is unchanged.
+        if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            return $this->wm_connection()->dialect()->quoteIdentifier((string) $identifier);
+        }
+
         return '`'.$this->_escape_identifier_value($identifier).'`';
     }
 
@@ -1567,6 +1585,11 @@ class wpdb
      */
     private function _escape_identifier_value($identifier)
     {
+        // WM: PostgreSQL doubles double quotes (and stores names lowercase).
+        if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            return str_replace('"', '""', strtolower((string) $identifier));
+        }
+
         return str_replace('`', '``', $identifier);
     }
 
@@ -1751,7 +1774,9 @@ class wpdb
                 }
 
                 if ($type === 'i') {
-                    $placeholder = '`%'.$format.'s`';
+                    // WM: PostgreSQL quotes identifiers with double quotes.
+                    $quote = ($this->wm_connection() && $this->wm_connection()->isPostgres()) ? '"' : '`';
+                    $placeholder = $quote.'%'.$format.'s'.$quote;
                     // Using a simple strpos() due to previous checking (e.g. $allowed_format).
                     $argnum_pos = strpos($format, '$');
 
@@ -2395,6 +2420,7 @@ class wpdb
      * @since WM-0.2.0
      * @since WP-0.71
      * @since WM-0.2.0 Changed: runs on Laravel's database connection (PDO) instead of mysqli. See docs/divergences.md.
+     * @since WM-0.3.0 Changed: works on PostgreSQL too; see docs/divergences.md, "$wpdb on PostgreSQL".
      * @link https://developer.wordpress.org/reference/classes/wpdb/
      *
      * @param  string  $query  Database query.
@@ -2509,7 +2535,8 @@ class wpdb
 
             // Take note of the insert_id.
             if (preg_match('/^\s*(insert|replace)\s/i', $query)) {
-                $this->insert_id = $this->wm_connection()->lastInsertId();
+                // PostgreSQL's quoted names use double quotes, which get_table_from_query() doesn't read.
+                $this->insert_id = $this->wm_connection()->lastInsertId($this->get_table_from_query(str_replace('"', '', $query)) ?: null);
             }
 
             // Return number of rows affected.
@@ -2775,6 +2802,7 @@ class wpdb
      *
      * @since WM-0.2.0
      * @since WP-3.0.0
+     * @since WM-0.3.0 Changed: names are quoted through quote_identifier(); on PostgreSQL, REPLACE keeps MySQL's meaning (delete the clashing row, then insert).
      * @see wpdb::prepare()
      * @see wpdb::$field_types
      * @see wp_set_wpdb_vars()
@@ -2819,14 +2847,126 @@ class wpdb
             $values[] = $value['value'];
         }
 
-        $fields = '`'.implode('`, `', array_keys($data)).'`';
+        // WM: names quoted through quote_identifier() (MySQL output unchanged).
+        if ($type === 'REPLACE' && $this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            return $this->wm_replace_on_postgres($table, $data);
+        }
+
+        $fields = implode(', ', array_map([$this, 'quote_identifier'], array_keys($data)));
         $formats = implode(', ', $formats);
 
-        $sql = "$type INTO `$table` ($fields) VALUES ($formats)";
+        $sql = "$type INTO ".$this->quote_identifier($table)." ($fields) VALUES ($formats)";
 
         $this->check_current_query = false;
 
-        return $this->query($this->prepare($sql, $values));
+        $result = $this->query($this->prepare($sql, $values));
+
+        // WM: on PostgreSQL, an insert that gives its own ID sets insert_id to it
+        // and moves the table's counter past it, as MySQL's AUTO_INCREMENT does.
+        if ($result !== false && $this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            $explicit = $this->wm_connection()->adoptExplicitId($table, array_combine(array_keys($data), array_column($data, 'value')));
+
+            if ($explicit !== null) {
+                $this->insert_id = $explicit;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * REPLACE on PostgreSQL, with MySQL's meaning: remove any row that clashes
+     * on the primary key or a unique key, then insert. Returns the rows
+     * affected (deleted plus inserted), as MySQL does, or false on failure.
+     * All-or-nothing: if the insert fails, nothing is deleted.
+     *
+     * @since WM-0.3.0
+     *
+     * @param  string  $table  Table name.
+     * @param  array  $data  Processed fields (value and format per column).
+     * @return int|false
+     */
+    protected function wm_replace_on_postgres($table, $data)
+    {
+        $clashes = [];
+
+        foreach ($this->wm_connection()->uniqueKeys($table) as $key) {
+            $conditions = [];
+            $values = [];
+
+            foreach ($key as $column) {
+                $field = $this->wm_field_named($data, $column);
+
+                if ($field === null || $data[$field]['value'] === null) {
+                    continue 2; // This key isn't fully given, so it can't clash.
+                }
+
+                $conditions[] = $this->quote_identifier($field).' = '.$data[$field]['format'];
+                $values[] = $data[$field]['value'];
+            }
+
+            $clashes[] = $this->prepare('('.implode(' AND ', $conditions).')', $values);
+        }
+
+        // All-or-nothing, as MySQL's REPLACE is: if the insert fails, the deleted row comes back.
+        return $this->wm_connection()->atomically(function () use ($table, $data, $clashes) {
+            $deleted = 0;
+
+            if ($clashes) {
+                $deleted = $this->query('DELETE FROM '.$this->quote_identifier($table).' WHERE '.implode(' OR ', $clashes));
+
+                if ($deleted === false) {
+                    return false;
+                }
+            }
+
+            $formats = [];
+            $values = [];
+            foreach ($data as $value) {
+                if (is_null($value['value'])) {
+                    $formats[] = 'NULL';
+
+                    continue;
+                }
+
+                $formats[] = $value['format'];
+                $values[] = $value['value'];
+            }
+
+            $fields = implode(', ', array_map([$this, 'quote_identifier'], array_keys($data)));
+            $sql = 'INSERT INTO '.$this->quote_identifier($table)." ($fields) VALUES (".implode(', ', $formats).')';
+
+            $this->check_current_query = false;
+            $inserted = $this->query($this->prepare($sql, $values));
+
+            if ($inserted === false) {
+                return false;
+            }
+
+            $this->rows_affected = $deleted + $inserted;
+
+            return $this->rows_affected;
+        });
+    }
+
+    /**
+     * The data key matching a column name, ignoring case (PostgreSQL stores names lowercase).
+     *
+     * @since WM-0.3.0
+     *
+     * @param  array  $data  Processed fields.
+     * @param  string  $column  Column name.
+     * @return string|null
+     */
+    protected function wm_field_named($data, $column)
+    {
+        foreach (array_keys($data) as $field) {
+            if (strtolower($field) === strtolower($column)) {
+                return $field;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -2864,6 +3004,7 @@ class wpdb
      *
      * @since WM-0.2.0
      * @since WP-2.5.0
+     * @since WM-0.3.0 Changed: names are quoted through quote_identifier(), so the SQL suits the database.
      * @see wpdb::prepare()
      * @see wpdb::$field_types
      * @see wp_set_wpdb_vars()
@@ -2910,29 +3051,29 @@ class wpdb
         $values = [];
         foreach ($data as $field => $value) {
             if (is_null($value['value'])) {
-                $fields[] = "`$field` = NULL";
+                $fields[] = $this->quote_identifier($field).' = NULL';
 
                 continue;
             }
 
-            $fields[] = "`$field` = ".$value['format'];
+            $fields[] = $this->quote_identifier($field).' = '.$value['format'];
             $values[] = $value['value'];
         }
         foreach ($where as $field => $value) {
             if (is_null($value['value'])) {
-                $conditions[] = "`$field` IS NULL";
+                $conditions[] = $this->quote_identifier($field).' IS NULL';
 
                 continue;
             }
 
-            $conditions[] = "`$field` = ".$value['format'];
+            $conditions[] = $this->quote_identifier($field).' = '.$value['format'];
             $values[] = $value['value'];
         }
 
         $fields = implode(', ', $fields);
         $conditions = implode(' AND ', $conditions);
 
-        $sql = "UPDATE `$table` SET $fields WHERE $conditions";
+        $sql = 'UPDATE '.$this->quote_identifier($table)." SET $fields WHERE $conditions";
 
         $this->check_current_query = false;
 
@@ -2962,6 +3103,7 @@ class wpdb
      *
      * @since WM-0.2.0
      * @since WP-3.4.0
+     * @since WM-0.3.0 Changed: names are quoted through quote_identifier(), so the SQL suits the database.
      * @see wpdb::prepare()
      * @see wpdb::$field_types
      * @see wp_set_wpdb_vars()
@@ -2994,18 +3136,18 @@ class wpdb
         $values = [];
         foreach ($where as $field => $value) {
             if (is_null($value['value'])) {
-                $conditions[] = "`$field` IS NULL";
+                $conditions[] = $this->quote_identifier($field).' IS NULL';
 
                 continue;
             }
 
-            $conditions[] = "`$field` = ".$value['format'];
+            $conditions[] = $this->quote_identifier($field).' = '.$value['format'];
             $values[] = $value['value'];
         }
 
         $conditions = implode(' AND ', $conditions);
 
-        $sql = "DELETE FROM `$table` WHERE $conditions";
+        $sql = 'DELETE FROM '.$this->quote_identifier($table)." WHERE $conditions";
 
         $this->check_current_query = false;
 
@@ -3023,6 +3165,7 @@ class wpdb
      *
      * @since WM-0.2.0
      * @since WP-4.2.0
+     * @since WM-0.3.0 Changed: on PostgreSQL, WordPress's empty date 0000-00-00 00:00:00 is stored as NULL.
      *
      * @param  string  $table  Table name.
      * @param  array  $data  Array of values keyed by their field names.
@@ -3035,6 +3178,21 @@ class wpdb
         $data = $this->process_field_formats($data, $format);
         if ($data === false) {
             return false;
+        }
+
+        // WM: PostgreSQL has no 0000-00-00 dates; in date columns, WordPress's
+        // empty date is stored as NULL. Other columns keep the text as given.
+        if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            $this->get_table_charset($table);
+            $columns = $this->col_meta[strtolower($table)] ?? [];
+
+            foreach ($data as $field => $value) {
+                $isDate = isset($columns[strtolower($field)]) && $columns[strtolower($field)]->Type === 'datetime';
+
+                if ($isDate && $value['value'] === '0000-00-00 00:00:00') {
+                    $data[$field]['value'] = null;
+                }
+            }
         }
 
         $data = $this->process_field_charsets($data, $table);
@@ -3515,6 +3673,7 @@ class wpdb
      *
      * @since WM-0.2.0
      * @since WP-4.2.0
+     * @since WM-0.3.0 Changed: on PostgreSQL, the column details come from PostgreSQL's catalog in SHOW FULL COLUMNS' shape (all text is UTF-8).
      *
      * @param  string  $table  Table name.
      * @return string|WP_Error Table character set, WP_Error object if it couldn't be found.
@@ -3548,9 +3707,15 @@ class wpdb
         $charsets = [];
         $columns = [];
 
-        $table_parts = explode('.', $table);
-        $table = '`'.implode('`.`', $table_parts).'`';
-        $results = $this->get_results("SHOW FULL COLUMNS FROM $table");
+        // WM: PostgreSQL has no SHOW FULL COLUMNS; the house builds the same
+        // column details from PostgreSQL's catalog (all text is UTF-8).
+        if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
+            $results = $this->wm_connection()->showFullColumns($table);
+        } else {
+            $table_parts = explode('.', $table);
+            $table = '`'.implode('`.`', $table_parts).'`';
+            $results = $this->get_results("SHOW FULL COLUMNS FROM $table");
+        }
         if (! $results) {
             return new WP_Error('wpdb_get_table_charset_failure', __('Could not retrieve table charset.'));
         }
@@ -3806,6 +3971,7 @@ class wpdb
      *
      * @since WM-0.2.0
      * @since WP-4.2.0
+     * @since WM-0.3.0 Changed: on PostgreSQL, every query is collation-safe (all UTF-8).
      *
      * @param  string  $query  The query to check.
      * @return bool True if the collation is safe, false if it isn't.
@@ -3813,6 +3979,11 @@ class wpdb
     protected function check_safe_collation($query)
     {
         if ($this->checking_collation) {
+            return true;
+        }
+
+        // WM: on PostgreSQL every column is UTF-8, so every query is safe.
+        if ($this->wm_connection() && $this->wm_connection()->isPostgres()) {
             return true;
         }
 
@@ -4211,7 +4382,7 @@ class wpdb
         }
 
         if ($this->result instanceof WpdbResult) {
-            $this->col_info = $this->result->columns;
+            $this->col_info = $this->result->columns();
         }
     }
 

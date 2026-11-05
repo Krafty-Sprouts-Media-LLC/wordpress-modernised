@@ -31,7 +31,7 @@ We take things from WordPress only when we choose to: mainly security fixes for 
 | SQL modes | **WordPress's relaxed MySQL modes for the whole connection** (Laravel's code included), until WordPress's `0000-00-00` empty dates are replaced; then strict mode returns |
 | Defaults | `WP_DEBUG_DISPLAY` **off** by default (WordPress: on); minimum PHP **8.3** (WordPress: 7.4). Both recorded in `docs/divergences.md` |
 | WordPress baseline | **WordPress 7.1.4** (tag `7.1.4` of `wordpress-develop`). Its PHPUnit suite is the checker |
-| PHP | **8.3 or newer** (Laravel 13's minimum) |
+| PHP | **8.3 or newer** (Laravel 13's minimum); **8.4 or newer with PostgreSQL** (PHP 8.3's PDO can corrupt some PostgreSQL queries) |
 | Framework | Laravel 13. App tests on PHPUnit 12; WordPress's tests on PHPUnit 9.6 in `conformance/` (they need it) |
 | Code style | **Laravel's style everywhere**, enforced by Pint. See `docs/coding-standards.md` |
 | Versions | Our own semver, starting at 0.1.0, tagged `@since WM-x.y.z`. WordPress's history is kept, labelled `@since WP-x.y.z` |
@@ -90,6 +90,6 @@ composer conformance:fetch
 composer conformance
 ```
 
-`docker compose up -d --wait` starts the local databases, MySQL 9.7 on port 3306 and MariaDB 12.3 on port 3307. Tests always run on a real database.
+`docker compose up -d --wait` starts the local databases: MySQL 9.7 on port 3306, MariaDB 12.3 on 3307, and PostgreSQL 18 on 5437. Tests always run on a real database: MySQL by default; set `DB_CONNECTION=mariadb DB_PORT=3307` or `DB_CONNECTION=pgsql DB_PORT=5437` to run the same tests (and the checker) on the others.
 
 There are two test runners. `php artisan test` runs our own tests on PHPUnit 12. `composer conformance` is the checker: it runs WordPress 7.1.4's own tests, which need PHPUnit 9.6, against the booted app. `composer conformance:fetch` downloads those tests once. Pass PHPUnit options after `--`, for example `composer conformance -- --testsuite harness`.

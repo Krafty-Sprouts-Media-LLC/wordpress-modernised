@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Core\Database;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -14,6 +15,15 @@ use Tests\TestCase;
 final class DbDeltaTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $this->markTestSkipped('dbDelta() reads MySQL table definitions; not supported on PostgreSQL yet (decision D, docs/divergences.md).');
+        }
+    }
 
     public function test_migrations_and_wordpress_schema_agree(): void
     {

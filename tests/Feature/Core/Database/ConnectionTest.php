@@ -12,9 +12,9 @@ use Tests\TestCase;
  */
 final class ConnectionTest extends TestCase
 {
-    public function test_app_tests_run_on_mysql_or_mariadb(): void
+    public function test_app_tests_run_on_a_supported_database(): void
     {
-        $this->assertContains(DB::connection()->getDriverName(), ['mysql', 'mariadb']);
+        $this->assertContains(DB::connection()->getDriverName(), ['mysql', 'mariadb', 'pgsql']);
         $this->assertSame(1, (int) DB::scalar('select 1'));
     }
 

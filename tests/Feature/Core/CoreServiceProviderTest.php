@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Core;
 
+use App\Providers\CoreServiceProvider;
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
@@ -16,6 +17,14 @@ final class CoreServiceProviderTest extends TestCase
     public function test_wp_debug_follows_app_debug(): void
     {
         $this->assertSame((bool) config('app.debug'), WP_DEBUG);
+    }
+
+    public function test_postgresql_needs_php_8_4(): void
+    {
+        // PHP 8.3's PDO scanner corrupts some PostgreSQL queries (a value ending in a
+        // backslash followed by one containing ? or :name); 8.4 uses PostgreSQL's own.
+        $this->assertFalse(CoreServiceProvider::supportsPostgres(80399));
+        $this->assertTrue(CoreServiceProvider::supportsPostgres(80400));
     }
 
     public function test_doing_it_wrong_logs_instead_of_throwing(): void

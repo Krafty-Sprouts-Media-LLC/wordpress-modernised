@@ -19,6 +19,9 @@ final class DatabaseAvailabilityTest extends TestCase
         $refused = new PDOException('SQLSTATE[HY000] [2002] No connection could be made because the target machine actively refused it');
 
         $this->assertSame('Start the test databases: docker compose up -d --wait', DatabaseAvailability::hint($refused));
+
+        $postgresRefused = new PDOException('SQLSTATE[08006] [7] connection to server at "127.0.0.1", port 5437 failed: Connection refused');
+        $this->assertSame('Start the test databases: docker compose up -d --wait', DatabaseAvailability::hint($postgresRefused));
         $this->assertNull(DatabaseAvailability::hint(new RuntimeException('x')));
     }
 }

@@ -89,7 +89,9 @@ final class WpdbTest extends TestCase
 
         // mysqli returns the server's own text for a DOUBLE; PDO's binary
         // protocol would hand back a PHP float rounded to 14 digits.
-        $this->assertSame('0.3333333333333333', $wpdb->get_var('SELECT 1.0e0/3'));
+        // (In PostgreSQL 1.0e0 is an exact decimal, so it asks for a double explicitly.)
+        $sql = DB::connection()->getDriverName() === 'pgsql' ? 'SELECT 1::float8/3' : 'SELECT 1.0e0/3';
+        $this->assertSame('0.3333333333333333', $wpdb->get_var($sql));
     }
 
     public function test_wpdb_queries_are_visible_to_laravel_listeners(): void
@@ -152,7 +154,7 @@ final class WpdbTest extends TestCase
 
         $wpdb->suppress_errors(true);
         $this->assertFalse($wpdb->query('SELECT * FROM wm_no_such_table'));
-        $this->assertStringContainsString("wm_no_such_table' doesn't exist", $wpdb->last_error);
+        $this->assertStringContainsString('wm_no_such_table', $wpdb->last_error);
         $wpdb->suppress_errors(false);
     }
 

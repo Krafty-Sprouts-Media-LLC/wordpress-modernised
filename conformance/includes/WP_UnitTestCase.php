@@ -41,12 +41,12 @@ abstract class WP_UnitTestCase extends TestCase
 
         $key = static::class.'::'.$this->getName(false);
 
-        if (isset($waiting[$key])) {
-            $this->markTestSkipped('Waiting: '.$waiting[$key]);
+        if ($reason = self::listedReason($waiting, $key)) {
+            $this->markTestSkipped('Waiting: '.$reason);
         }
 
-        if (isset($diverged[$key])) {
-            $this->markTestSkipped('Diverged on purpose: '.$diverged[$key]);
+        if ($reason = self::listedReason($diverged, $key)) {
+            $this->markTestSkipped('Diverged on purpose: '.$reason);
         }
 
         if (! self::$hooks_saved) {
@@ -85,6 +85,24 @@ abstract class WP_UnitTestCase extends TestCase
         }
 
         throw new WPDieException($message, $code);
+    }
+
+    /**
+     * The reason a test is listed in waiting.php or diverged.php, if it is.
+     * Entries apply to every database, or to one database under its driver
+     * name ('pgsql' => [...]); "TestClass::*" covers a whole class.
+     *
+     * @param  array<string, string|array<string, string>>  $list
+     */
+    private static function listedReason(array $list, string $key): ?string
+    {
+        $entries = array_merge(
+            array_filter($list, 'is_string'),
+            $list[DB::connection()->getDriverName()] ?? [],
+        );
+        $class = strstr($key, '::', true).'::*';
+
+        return $entries[$key] ?? $entries[$class] ?? null;
     }
 
     public function tear_down()
