@@ -21,6 +21,11 @@
             <file>wordpress-develop/tests/phpunit/tests/functions/wpListFilter.php</file>
             <file>wordpress-develop/tests/phpunit/tests/functions/wpListSort.php</file>
             <file>wordpress-develop/tests/phpunit/tests/functions/wpFilterObjectList.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/wpTriggerError.php</file>
+        </testsuite>
+        <testsuite name="adapted">
+            <!-- WordPress tests adapted after a recorded divergence (docs/divergences.md). -->
+            <directory suffix=".php">adapted</directory>
         </testsuite>
     </testsuites>
 </phpunit>

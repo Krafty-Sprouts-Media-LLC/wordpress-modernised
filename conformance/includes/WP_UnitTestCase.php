@@ -35,13 +35,18 @@ abstract class WP_UnitTestCase extends TestCase
 
     public function set_up()
     {
-        static $waiting = null;
+        static $waiting = null, $diverged = null;
         $waiting ??= require dirname(__DIR__).'/waiting.php';
+        $diverged ??= require dirname(__DIR__).'/diverged.php';
 
         $key = static::class.'::'.$this->getName(false);
 
         if (isset($waiting[$key])) {
             $this->markTestSkipped('Waiting: '.$waiting[$key]);
+        }
+
+        if (isset($diverged[$key])) {
+            $this->markTestSkipped('Diverged on purpose: '.$diverged[$key]);
         }
 
         if (! self::$hooks_saved) {

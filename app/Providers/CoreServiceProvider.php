@@ -28,7 +28,7 @@ final class CoreServiceProvider extends ServiceProvider
         // Strings and static callbacks only: WordPress's hook engine ignores an
         // identical callback added twice, so booting the app again (as every
         // test does) never duplicates them.
-        add_filter('wp_trigger_error_trigger_error', '__return_false');
+        add_filter('wp_trigger_error_trigger_error', [WordPressErrors::class, 'shouldTrigger'], 10, 4);
         add_action('wp_trigger_error_always_run', [WordPressErrors::class, 'log'], 10, 3);
     }
 }

@@ -35,6 +35,11 @@ if (is_dir($target)) {
     $head = git(['-C', $target, 'rev-parse', 'HEAD']);
 
     if ($head === SHA) {
+        if (git(['-C', $target, 'status', '--porcelain']) !== '') {
+            fwrite(STDERR, 'wordpress-develop has local changes; restore it with: git -C conformance/wordpress-develop checkout -- .'.PHP_EOL);
+            exit(1);
+        }
+
         echo 'already at '.TAG.PHP_EOL;
         exit(0);
     }

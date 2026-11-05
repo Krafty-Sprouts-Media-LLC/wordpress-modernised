@@ -6,6 +6,7 @@ use Illuminate\Contracts\Console\Kernel;
  * Bootstrap for the checker: boots the real Laravel app, then loads
  * WordPress 7.1.4's test utilities so its own tests run against our code.
  */
+define('CHECKER_STARTED_AT', time());
 define('WP_DEBUG', true);
 define('WP_TESTS_CHECKOUT', __DIR__.'/wordpress-develop');
 
@@ -19,6 +20,12 @@ if (! is_dir(WP_TESTS_CHECKOUT)) {
 // Point Laravel's package discovery at this project's own vendor folder, so it
 // never registers dev-only providers that are installed only in the root.
 @mkdir(__DIR__.'/cache', 0777, true);
+
+// Rebuild Laravel's package and service caches on every run. Laravel only
+// rebuilds them when missing, and nothing here runs package:discover, so a
+// provider added or removed in the app would otherwise be missed.
+@unlink(__DIR__.'/cache/packages.php');
+@unlink(__DIR__.'/cache/services.php');
 
 foreach ([
     'APP_ENV' => 'testing',
