@@ -65,7 +65,11 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            ]) + [
+                // One statement per query, like WordPress's mysqli: a plugin's SQL
+                // injection must not be able to chain a second statement.
+                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_MULTI_STATEMENTS : PDO::MYSQL_ATTR_MULTI_STATEMENTS) => false,
+            ] : [],
         ],
 
         'mariadb' => [
@@ -89,7 +93,10 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            ]) + [
+                // One statement per query, like WordPress's mysqli (see the mysql connection).
+                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_MULTI_STATEMENTS : PDO::MYSQL_ATTR_MULTI_STATEMENTS) => false,
+            ] : [],
         ],
 
         'pgsql' => [

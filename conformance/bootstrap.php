@@ -12,6 +12,8 @@ define('WP_DEBUG', true);
 // WordPress's test configuration shows errors (its default); the app defaults this to off (docs/divergences.md).
 define('WP_DEBUG_DISPLAY', true);
 define('WP_TESTS_CHECKOUT', __DIR__.'/wordpress-develop');
+// WordPress's install folder, as code loading wp-admin/includes/upgrade.php expects (stand-in: docs/stand-ins.md).
+define('ABSPATH', __DIR__.'/abspath/');
 
 $root = dirname(__DIR__);
 

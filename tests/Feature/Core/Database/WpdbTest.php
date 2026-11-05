@@ -6,6 +6,7 @@ namespace Tests\Feature\Core\Database;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use PDO;
 use stdClass;
 use Tests\TestCase;
 use wpdb;
@@ -80,6 +81,46 @@ final class WpdbTest extends TestCase
 
         $this->assertNotSame(DB::connection()->getPdo(), $other->dbh);
         $this->assertSame('1', $other->get_var('SELECT 1'));
+    }
+
+    public function test_one_statement_per_query_like_mysqli(): void
+    {
+        global $wpdb;
+
+        // mysqli_query() runs one statement; PDO allows several unless told not to.
+        // A plugin's SQL injection must not be able to chain a second statement.
+        $wpdb->suppress_errors(true);
+        $this->assertFalse($wpdb->query("SELECT 1; INSERT INTO {$wpdb->options} (option_name, option_value) VALUES ('wm_stacked', 'x')"));
+        $wpdb->suppress_errors(false);
+
+        $this->assertSame('0', $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name = 'wm_stacked'"));
+    }
+
+    public function test_one_statement_per_query_even_with_emulated_prepares(): void
+    {
+        global $wpdb;
+
+        // Today the server refuses stacked statements only because Laravel turns
+        // emulated prepares off. The connection must refuse them on its own too.
+        $pdo = DB::connection()->getPdo();
+        $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, true);
+
+        try {
+            $wpdb->suppress_errors(true);
+            $this->assertFalse($wpdb->query('SELECT 1; SELECT 2'));
+        } finally {
+            $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+            $wpdb->suppress_errors(false);
+        }
+    }
+
+    public function test_plugin_connections_also_run_one_statement_per_query(): void
+    {
+        $config = DB::connection()->getConfig();
+        $other = new wpdb($config['username'], $config['password'], 'wordpress_conformance', $config['host'].':'.$config['port']);
+
+        $other->suppress_errors(true);
+        $this->assertFalse($other->query('SELECT 1; SELECT 2'));
     }
 
     public function test_errors_are_reported_like_wordpress(): void

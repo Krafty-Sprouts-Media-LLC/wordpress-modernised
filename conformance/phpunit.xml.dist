@@ -25,6 +25,7 @@
             <file>wordpress-develop/tests/phpunit/tests/db.php</file>
             <file>wordpress-develop/tests/phpunit/tests/db/realEscape.php</file>
             <file>wordpress-develop/tests/phpunit/tests/db/charset.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/db/dbDelta.php</file>
         </testsuite>
         <testsuite name="adapted">
             <!-- WordPress tests adapted after a recorded divergence (docs/divergences.md). -->
