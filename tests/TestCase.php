@@ -2,22 +2,38 @@
 
 namespace Tests;
 
+use App\Core\Database\DatabaseAvailability;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Base for the app's tests. All tests share one PHP process, so the WordPress
  * hook globals are saved after the first boot and restored after every test.
+ * The first test also checks the test database is reachable.
  */
 abstract class TestCase extends BaseTestCase
 {
     /** @var array<string, mixed>|null */
     private static ?array $hooksAfterBoot = null;
 
+    private static bool $databaseChecked = false;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         self::$hooksAfterBoot ??= self::copyHooks($GLOBALS);
+
+        if (! self::$databaseChecked) {
+            self::$databaseChecked = true;
+
+            try {
+                DB::connection()->getPdo();
+            } catch (Throwable $e) {
+                $this->fail(DatabaseAvailability::hint($e) ?? $e->getMessage());
+            }
+        }
     }
 
     protected function tearDown(): void

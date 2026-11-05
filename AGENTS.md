@@ -77,11 +77,14 @@ We take things from WordPress only when we choose to: mainly security fixes for 
 The local toolchain is Laravel Herd on Windows (PHP and Composer on `PATH` in PowerShell).
 
 ```bash
+docker compose up -d --wait
 composer install
 php artisan test
 vendor/bin/pint
 composer conformance:fetch
 composer conformance
 ```
+
+`docker compose up -d --wait` starts the local databases, MySQL 9.7 on port 3306 and MariaDB 12.3 on port 3307. Tests always run on a real database.
 
 There are two test runners. `php artisan test` runs our own tests on PHPUnit 12. `composer conformance` is the checker: it runs WordPress 7.1.4's own tests, which need PHPUnit 9.6, against the booted app. `composer conformance:fetch` downloads those tests once. Pass PHPUnit options after `--`, for example `composer conformance -- --testsuite harness`.
