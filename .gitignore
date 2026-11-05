@@ -1,0 +1,7 @@
+# Internal docs, briefs, references and notes: never published (this repo is public).
+/private/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
