@@ -2,6 +2,18 @@
 
 **In plain words:** every place where we deliberately behave differently from WordPress is listed here, with which plugins it affects and how they get fixed (AGENTS.md rule 4). WordPress's tests for these behaviours are skipped as "diverged on purpose" (`conformance/diverged.php`), and tests describing our behaviour live in `conformance/adapted/`.
 
+## WordPress's tables on PostgreSQL
+
+**Since:** WM-0.3.0
+
+| | |
+|---|---|
+| **What WordPress does** | Runs on MySQL or MariaDB only. Its tables use MySQL types, `_ci` collations (text compared without case), `0000-00-00 00:00:00` as an empty date, unsigned integers, and mixed-case column names (`ID`, `comment_ID`, `comment_post_ID`, `comment_author_IP`). |
+| **What we do instead** | On PostgreSQL 18, the same 12 tables and columns, converted from WordPress's own definitions (`App\Core\Database\WordPressSchema::postgresStatements()`): <br>- identity columns for `auto_increment`;<br>- text in the case-insensitive ICU collation `wp_ci`;<br>- **empty dates stored as NULL**;<br>- **column names lowercase** (`id`, `comment_id`, …), because PostgreSQL folds unquoted names and WordPress's SQL doesn't quote them;<br>- unsigned not enforced;<br>- index names prefixed with their table (PostgreSQL index names are unique per schema). |
+| **Why** | PostgreSQL support (owner's decisions A–C, 2026-11-05). PostgreSQL rejects `0000-00-00`, has no unsigned integers, and folds unquoted names to lowercase. |
+| **Plugins it breaks** | On PostgreSQL only: plugins writing their own SQL that inserts `0000-00-00` dates, relies on unsigned overflow behaviour, quotes WordPress's mixed-case columns (`"ID"`), or uses MySQL-only syntax (API-level compatibility, AGENTS.md rule 3). MySQL and MariaDB are unchanged. |
+| **How they are fixed** | Use `$wpdb`'s methods, which handle the differences; write portable SQL. |
+
 ## `$wpdb->dbh` is a PDO connection, not mysqli
 
 **Since:** WM-0.2.0
