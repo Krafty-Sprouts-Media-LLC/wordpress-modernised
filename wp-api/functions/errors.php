@@ -259,7 +259,7 @@ function wp_trigger_error($function_name, $message, $error_level = E_USER_NOTICE
  *
  * This function is to be used in every function that is deprecated.
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-2.5.0
  * @since WP-5.4.0 This function is no longer marked as "private".
  * @since WP-5.4.0 The error type is now classified as E_USER_DEPRECATED (used to default to E_USER_NOTICE).
@@ -274,7 +274,7 @@ function _deprecated_function($function_name, $version, $replacement = '')
     /**
      * Fires when a deprecated function is called.
      *
-     * @since WM-0.1.0
+     * @since WM-0.2.0
      * @since WP-2.5.0
      *
      * @param  string  $function_name  The function that was called.
@@ -286,7 +286,7 @@ function _deprecated_function($function_name, $version, $replacement = '')
     /**
      * Filters whether to trigger an error for deprecated functions.
      *
-     * @since WM-0.1.0
+     * @since WM-0.2.0
      * @since WP-2.5.0
      *
      * @param  bool  $trigger  Whether to trigger the error for deprecated functions. Default true.
@@ -334,7 +334,7 @@ function _deprecated_function($function_name, $version, $replacement = '')
  * Returns a comma-separated string or array of functions that have been called to get
  * to the current point in code.
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-3.4.0
  * @see https://core.trac.wordpress.org/ticket/19589
  *
@@ -396,7 +396,7 @@ function wp_debug_backtrace_summary($ignore_class = null, $skip_frames = 0, $pre
  *
  * Returns whether `$thing` is an instance of the `WP_Error` class.
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-2.1.0
  *
  * @param  mixed  $thing  The variable to check.
@@ -412,7 +412,7 @@ function is_wp_error($thing)
         /**
          * Fires when `is_wp_error()` is called and its parameter is an instance of WP_Error.
          *
-         * @since WM-0.1.0
+         * @since WM-0.2.0
          * @since WP-5.6.0
          *
          * @param  WP_Error  $thing  The error object passed to `is_wp_error()`.

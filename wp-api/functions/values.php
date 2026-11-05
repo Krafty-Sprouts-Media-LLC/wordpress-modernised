@@ -9,7 +9,7 @@
 /**
  * Converts a value to non-negative integer.
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-2.5.0
  *
  * @param  mixed  $maybeint  Data you wish to have converted to a non-negative integer.
@@ -36,7 +36,7 @@ function absint($maybeint)
  * `mbstring_binary_safe_encoding()` call must be followed up with an equal number
  * of `reset_mbstring_encoding()` calls.
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-3.7.0
  * @see reset_mbstring_encoding()
  *
@@ -78,7 +78,7 @@ function mbstring_binary_safe_encoding($reset = false)
  * Resets the mbstring internal encoding to a users previously set encoding.
  *
  * @see mbstring_binary_safe_encoding()
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-3.7.0
  */
 function reset_mbstring_encoding()
@@ -89,7 +89,7 @@ function reset_mbstring_encoding()
 /**
  * Tests if a given path is a stream URL
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-3.5.0
  *
  * @param  string  $path  The resource path or URL.
@@ -117,7 +117,7 @@ function wp_is_stream($path)
  * Allows for two leading slashes for Windows network shares, but
  * ensures that all other duplicate slashes are reduced to a single.
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-3.9.0
  * @since WP-4.4.0 Ensures upper-case drive letters on Windows systems.
  * @since WP-4.5.0 Allows for Windows network shares.

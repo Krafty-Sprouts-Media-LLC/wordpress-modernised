@@ -9,7 +9,7 @@
 /**
  * Retrieve the SQL for creating database tables.
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-3.3.0
  *
  * @global wpdb $wpdb WordPress database abstraction object.

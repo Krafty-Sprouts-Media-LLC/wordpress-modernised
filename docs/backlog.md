@@ -4,13 +4,13 @@
 
 ## Waiting for the owner's decision
 
-| # | Decision | Recommendation | Where |
+None right now. Decided items move to the decisions table in `AGENTS.md`.
+
+## Planned for a later step (decided)
+
+| # | What | Where | From |
 |---|---|---|---|
-| D1 | Laravel runs under WordPress's relaxed MySQL modes (one shared connection), so Laravel code doesn't get strict mode's "reject bad data" errors: too-long text is cut off silently. | Keep for now. Bring strict mode back when WordPress's `0000-00-00` empty dates are replaced (a table change, one at a time). | `config/database.php` (`modes`) |
-| D2 | A plugin's own `START TRANSACTION` inside Laravel's `DB::transaction()` commits Laravel's earlier writes; the reverse fails. | Route `$wpdb`'s `START TRANSACTION` / `COMMIT` / `ROLLBACK` through Laravel's transaction manager in a later step. | `docs/divergences.md` ("`$wpdb->dbh` is a PDO connection") |
-| D3 | Which version tag doors added in the database step get. | `@since WM-0.2.0` for everything added in that step. | `wp-api/` (see item 6) |
-| D4 | Confirm two changed defaults: `WP_DEBUG_DISPLAY` off by default, minimum PHP 8.3. | Keep both (both recorded in `docs/divergences.md`). | `config/wordpress.php`, `wp-api/version.php` |
-| D5 | The checker installs its packages with `composer update` and no lock file, so it needs the network each run and its versions could drift from the app's `composer.lock` (identical today). | Keep, and add a CI check that the checker's Laravel version equals the app's. | `conformance/composer.json`, `conformance/run.php` |
+| P1 | Route `$wpdb`'s `START TRANSACTION` / `COMMIT` / `ROLLBACK` through Laravel's transaction manager. Today a plugin's own `START TRANSACTION` inside Laravel's `DB::transaction()` commits Laravel's earlier writes, and the reverse fails. | `wp-api/classes/wpdb.php`, `app/Core/Database/WpdbConnection.php`; recorded in `docs/divergences.md` | Database review #6; owner decision D2 |
 
 ## Fixes not done yet
 
@@ -21,7 +21,6 @@
 | 3 | `$wpdb->set_charset()` on the site connection sends `SET NAMES` but PDO's own escaping charset doesn't follow. Only matters for gbk, big5 or sjis connections. | `app/Core/Database/WpdbConnection.php` (`setCharset()`) | Database review #13 |
 | 4 | Each new `$wpdb` adds a `query` filter in `placeholder_escape()`; in tests the app boots many times, so these pile up. | `wp-api/classes/wpdb.php` (`placeholder_escape()`), `app/Providers/CoreServiceProvider.php` | Database review #15 |
 | 5 | The `schema.php` file docblock names the wrong WordPress path: it should be `src/wp-admin/includes/schema.php` (AGENTS.md rule 8). | `wp-api/functions/schema.php` | Database review #11 |
-| 6 | Version tags: doors added in the database step are tagged `WM-0.1.0`, other parts `WM-0.2.0`; about 14 changed `$wpdb` methods lack a `@since WM-0.2.0 Changed:` line (`__get`, `determine_charset`, `set_sql_mode`, `select`, `_real_escape`, `print_error`, `flush`, `db_connect`, `check_connection`, `query`, `_do_query`, `load_col_info`, `bail`, `close`, `db_server_info`). Waits for D3. | `wp-api/classes/wpdb.php`, `WP_Error.php`, `db-delta.php`, `schema.php`, `values.php`, `errors.php` | Database review #10 |
 | 7 | A leftover empty `wpdb` placeholder: the real `wpdb` now exists, so the checker's stand-in is dead code, and the stand-ins list still names it. | `conformance/includes/stand-ins.php`, `docs/stand-ins.md` | Database review #12 |
 | 8 | The table-prefix test doesn't check that `$wpdb->prefix` and `$wpdb->posts` follow `config('wordpress.table_prefix')`. | `tests/Feature/Core/Database/WordPressTablesTest.php` | Database review #16 |
 | 9 | The plugin-table `dbDelta()` test creates a real table inside a test transaction (MySQL commits it), and leaves the table behind if an assertion fails before the drop. | `tests/Feature/Core/Database/DbDeltaTest.php` | Database review #16 |

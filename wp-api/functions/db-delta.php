@@ -11,7 +11,7 @@
  *
  * Useful for creating new tables and updating existing tables to a new structure.
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-1.5.0
  * @since WP-6.1.0 Ignores display width for integer data types on MySQL 8.0.17 or later,
  *              to match MySQL behavior. Note: This does not affect MariaDB.
@@ -42,7 +42,7 @@ function dbDelta($queries = '', $execute = true)
     /**
      * Filters the dbDelta SQL queries.
      *
-     * @since WM-0.1.0
+     * @since WM-0.2.0
      * @since WP-3.3.0
      *
      * @param  string[]  $queries  An array of dbDelta SQL queries.
@@ -88,7 +88,7 @@ function dbDelta($queries = '', $execute = true)
      *
      * Queries filterable via this hook contain "CREATE TABLE" or "CREATE DATABASE".
      *
-     * @since WM-0.1.0
+     * @since WM-0.2.0
      * @since WP-3.3.0
      *
      * @param  string[]  $cqueries  An array of dbDelta create SQL queries.
@@ -100,7 +100,7 @@ function dbDelta($queries = '', $execute = true)
      *
      * Queries filterable via this hook contain "INSERT INTO" or "UPDATE".
      *
-     * @since WM-0.1.0
+     * @since WM-0.2.0
      * @since WP-3.3.0
      *
      * @param  string[]  $iqueries  An array of dbDelta insert or update SQL queries.
@@ -472,7 +472,7 @@ function dbDelta($queries = '', $execute = true)
  * WordPress is on the main site of the main network, to avoid running queries
  * more than once in multi-site or multi-network environments.
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-4.3.0
  *
  * @return bool Whether to run the upgrade routines on global tables.
@@ -501,7 +501,7 @@ function wp_should_upgrade_global_tables()
     /**
      * Filters if upgrade routines should be run on global tables.
      *
-     * @since WM-0.1.0
+     * @since WM-0.2.0
      * @since WP-4.3.0
      *
      * @param  bool  $should_upgrade  Whether to run the upgrade routines on global tables.

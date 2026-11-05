@@ -9,7 +9,7 @@
 /**
  * Determines whether Multisite is enabled.
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-3.0.0
  *
  * @return bool True if Multisite is enabled, false otherwise.

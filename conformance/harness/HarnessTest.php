@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Composer\InstalledVersions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Runner\Version;
@@ -39,6 +40,23 @@ final class HarnessTest extends TestCase
 
         $this->assertFileExists($manifest);
         $this->assertGreaterThanOrEqual(CHECKER_STARTED_AT, filemtime($manifest));
+    }
+
+    public function test_checker_runs_the_same_laravel_as_the_app(): void
+    {
+        // The checker installs without a lock file, so its packages could drift
+        // from the app's composer.lock. Laravel is the one that must not.
+        $lock = json_decode((string) file_get_contents(dirname(__DIR__, 2).'/composer.lock'), true);
+        $app = null;
+
+        foreach ($lock['packages'] as $package) {
+            if ($package['name'] === 'laravel/framework') {
+                $app = $package['version'];
+            }
+        }
+
+        $this->assertNotNull($app, 'laravel/framework is missing from composer.lock.');
+        $this->assertSame($app, InstalledVersions::getPrettyVersion('laravel/framework'));
     }
 
     public function test_checker_database_is_migrated(): void

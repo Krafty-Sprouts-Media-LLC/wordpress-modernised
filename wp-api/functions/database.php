@@ -12,7 +12,7 @@
  *
  * Columns not listed here default to `%s`.
  *
- * @since WM-0.1.0
+ * @since WM-0.2.0
  * @since WP-3.0.0
  *
  * @global wpdb   $wpdb         WordPress database abstraction object.
