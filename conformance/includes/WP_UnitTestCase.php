@@ -33,16 +33,81 @@ abstract class WP_UnitTestCase extends TestCase
     /** @var array<string, mixed> */
     protected static $hooks_saved = [];
 
+    /** @var WP_UnitTest_Factory */
+    protected $factory;
+
+    /** @var array<string, string> Test classes whose shared fixture needs an area not built yet. */
+    private static $fixture_waiting = [];
+
+    /**
+     * WordPress's test data factories (posts now; users, terms and the rest
+     * work once their areas are built).
+     *
+     * @return WP_UnitTest_Factory
+     */
+    protected static function factory()
+    {
+        static $factory = null;
+
+        if (! $factory) {
+            $factory = new WP_UnitTest_Factory;
+        }
+
+        return $factory;
+    }
+
+    /**
+     * Runs a test class's shared fixtures (wpSetUpBeforeClass()) and keeps them,
+     * as WordPress does: they are committed, and removed after the class.
+     */
+    public static function set_up_before_class()
+    {
+        parent::set_up_before_class();
+
+        $class = get_called_class();
+
+        // A class listed as a whole (waiting or diverged) never runs its shared
+        // fixture, which may need an area that isn't built yet.
+        $waiting = require dirname(__DIR__).'/waiting.php';
+        $diverged = require dirname(__DIR__).'/diverged.php';
+        if (self::listedReason($waiting, $class.'::*') || self::listedReason($diverged, $class.'::*')) {
+            return;
+        }
+
+        if (method_exists($class, 'wpSetUpBeforeClass')) {
+            try {
+                call_user_func([$class, 'wpSetUpBeforeClass'], static::factory());
+            } catch (Error $e) {
+                // A fixture that calls a function or class not built yet makes the
+                // whole class wait, with the missing piece as the reason. Any other
+                // error is a real failure.
+                if (! preg_match('/Call to undefined (function|method)|Class "[^"]+" not found/', $e->getMessage())) {
+                    throw $e;
+                }
+
+                self::$fixture_waiting[$class] = 'shared fixture needs an area not built yet ('.$e->getMessage().')';
+            }
+        }
+
+        self::commit_transaction();
+    }
+
     public function set_up()
     {
         static $waiting = null, $diverged = null;
         $waiting ??= require dirname(__DIR__).'/waiting.php';
         $diverged ??= require dirname(__DIR__).'/diverged.php';
 
+        $this->factory = static::factory();
+
         $key = static::class.'::'.$this->getName(false);
 
         if ($reason = self::listedReason($waiting, $key)) {
             $this->markTestSkipped('Waiting: '.$reason);
+        }
+
+        if (isset(self::$fixture_waiting[static::class])) {
+            $this->markTestSkipped('Waiting: '.self::$fixture_waiting[static::class]);
         }
 
         if ($reason = self::listedReason($diverged, $key)) {
@@ -148,9 +213,38 @@ abstract class WP_UnitTestCase extends TestCase
     /**
      * Flushes the object cache after each test class, as WordPress does.
      */
+    /**
+     * Deletes the content tests create, as WordPress's _delete_all_data() does
+     * (tests/phpunit/includes/functions.php), keeping user 1 and term 1.
+     */
+    private static function delete_all_data(): void
+    {
+        global $wpdb;
+
+        foreach ([$wpdb->posts, $wpdb->postmeta, $wpdb->comments, $wpdb->commentmeta, $wpdb->term_relationships, $wpdb->termmeta] as $table) {
+            $wpdb->query("DELETE FROM {$table}");
+        }
+
+        foreach ([$wpdb->terms, $wpdb->term_taxonomy] as $table) {
+            $wpdb->query("DELETE FROM {$table} WHERE term_id != 1");
+        }
+
+        $wpdb->query("UPDATE {$wpdb->term_taxonomy} SET count = 0");
+        $wpdb->query("DELETE FROM {$wpdb->users} WHERE ID != 1");
+        $wpdb->query("DELETE FROM {$wpdb->usermeta} WHERE user_id != 1");
+    }
+
     public static function tear_down_after_class()
     {
+        $class = get_called_class();
+
+        if (method_exists($class, 'wpTearDownAfterClass') && ! isset(self::$fixture_waiting[$class])) {
+            call_user_func([$class, 'wpTearDownAfterClass']);
+        }
+
+        self::delete_all_data();
         self::flush_cache();
+        self::commit_transaction();
 
         parent::tear_down_after_class();
     }
@@ -202,11 +296,33 @@ abstract class WP_UnitTestCase extends TestCase
         return $entries[$key] ?? $entries[$class] ?? null;
     }
 
+    /**
+     * Unregisters every meta key a test registered.
+     */
+    public function unregister_all_meta_keys()
+    {
+        global $wp_meta_keys;
+
+        if (! is_array($wp_meta_keys)) {
+            return;
+        }
+
+        foreach ($wp_meta_keys as $object_type => $type_keys) {
+            foreach ($type_keys as $object_subtype => $subtype_keys) {
+                foreach ($subtype_keys as $key => $value) {
+                    unregister_meta_key($object_type, $key, $object_subtype);
+                }
+            }
+        }
+    }
+
     public function tear_down()
     {
         // Roll back everything, even if a test committed on its own (Laravel
         // only rolls back the PDO when it is still in a transaction).
         DB::rollBack(0);
+
+        $this->unregister_all_meta_keys();
 
         $this->expected_deprecated = [];
         $this->caught_deprecated = [];
@@ -441,6 +557,31 @@ abstract class WP_UnitTestCase extends TestCase
     /**
      * Asserts two arrays hold equal values (loose comparison), in any order.
      */
+    /**
+     * Turns a list of strings into a data provider keyed by each string.
+     *
+     * @param  array  $input  List of strings.
+     * @return array Data provider.
+     */
+    public static function text_array_to_dataprovider($input)
+    {
+        $data = [];
+
+        foreach ($input as $value) {
+            if (! is_string($value)) {
+                throw new Exception('All values in the input array should be text strings. Fix the input data.');
+            }
+
+            if (isset($data[$value])) {
+                throw new Exception("Attempting to add a duplicate data set for value $value to the data provider. Fix the input data.");
+            }
+
+            $data[$value] = [$value];
+        }
+
+        return $data;
+    }
+
     public function assertWPError($actual, $message = '')
     {
         $this->assertInstanceOf('WP_Error', $actual, $message);

@@ -75,6 +75,17 @@ final class WordPressTablesPostgresTest extends TestCase
         $this->assertNull(DB::table('wp_posts')->value('post_date_gmt'));
     }
 
+    public function test_a_partial_row_fills_text_columns_like_mysql(): void
+    {
+        // MySQL (in WordPress's relaxed modes) stores '' in a NOT NULL text
+        // column left out of an INSERT; plugins rely on it.
+        global $wpdb;
+
+        $this->assertSame(1, $wpdb->insert($wpdb->posts, ['post_title' => 'Only a title']));
+        // get_row(): WordPress's get_var() turns '' into null.
+        $this->assertSame('', $wpdb->get_row("SELECT post_content FROM {$wpdb->posts} WHERE post_title = 'Only a title'")->post_content);
+    }
+
     private function typeOf(string $table, string $column): ?string
     {
         return DB::table('information_schema.columns')->where('table_name', $table)->where('column_name', $column)->value('data_type');

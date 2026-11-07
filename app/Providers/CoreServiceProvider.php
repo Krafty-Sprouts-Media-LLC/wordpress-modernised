@@ -11,6 +11,8 @@ use App\Core\Hooks\WordPressErrors;
 use App\Core\Options\Events\OptionAdded;
 use App\Core\Options\Events\OptionDeleted;
 use App\Core\Options\Events\OptionUpdated;
+use App\Core\Posts\Events\PostDeleted;
+use App\Core\Posts\Events\PostSaved;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -81,6 +83,8 @@ final class CoreServiceProvider extends ServiceProvider
         $hooks->bridge(OptionAdded::class, 'added_option', fn (OptionAdded $event) => [$event->option, $event->value]);
         $hooks->bridge(OptionUpdated::class, 'updated_option', fn (OptionUpdated $event) => [$event->option, $event->oldValue, $event->value]);
         $hooks->bridge(OptionDeleted::class, 'deleted_option', fn (OptionDeleted $event) => [$event->option]);
+        $hooks->bridge(PostSaved::class, 'save_post', fn (PostSaved $event) => [$event->postId, $event->post, $event->update]);
+        $hooks->bridge(PostDeleted::class, 'deleted_post', fn (PostDeleted $event) => [$event->postId, $event->post]);
     }
 
     /**

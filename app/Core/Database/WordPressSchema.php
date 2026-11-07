@@ -281,6 +281,13 @@ final class WordPressSchema
         $notNull = str_contains($rest, 'NOT NULL') ? ' NOT NULL' : '';
         $default = preg_match("/default ('[^']*'|\\d+|NULL)/i", $rest, $d) ? ' DEFAULT '.$d[1] : '';
 
+        // MySQL, in WordPress's relaxed SQL modes, stores '' in a NOT NULL text
+        // column an INSERT leaves out; plugins rely on it, so PostgreSQL gets it
+        // as a default.
+        if ($notNull !== '' && $default === '' && str_ends_with($type, 'text')) {
+            $default = " DEFAULT ''";
+        }
+
         return $pgType.$notNull.$default;
     }
 

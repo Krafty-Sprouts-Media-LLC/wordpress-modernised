@@ -213,9 +213,9 @@ final class WpdbPostgresTest extends TestCase
 
         $wpdb->insert($wpdb->options, ['option_name' => 'wm_keep', 'option_value' => 'original', 'autoload' => 'off']);
 
-        // option_value is required (NOT NULL, no default), so the insert half fails.
+        // A column that doesn't exist makes the insert half fail after the delete half.
         $wpdb->suppress_errors(true);
-        $this->assertFalse($wpdb->replace($wpdb->options, ['option_name' => 'wm_keep', 'autoload' => 'off']));
+        $this->assertFalse($wpdb->replace($wpdb->options, ['option_name' => 'wm_keep', 'no_such_column' => 'x']));
         $wpdb->suppress_errors(false);
 
         // MySQL's REPLACE is all-or-nothing: the old row must survive.

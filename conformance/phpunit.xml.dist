@@ -53,6 +53,29 @@
             <file>wordpress-develop/tests/phpunit/tests/post/getPostTypeLabels.php</file>
             <file>wordpress-develop/tests/phpunit/tests/post/isPostTypeViewable.php</file>
             <file>wordpress-develop/tests/phpunit/tests/post/isPostStatusViewable.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/meta/isProtectedMeta.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/meta.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/meta/deleteMetadata.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/meta/registerMeta.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/meta/slashes.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/meta/updateMetadata.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/getPost.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/wpPost.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/wpDeletePost.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/wpTrashPost.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/wpUntrashPost.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/wpPublishPost.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/wpUniquePostSlug.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/truncatePostSlug.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/getPostParent.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/wpGetPostParentId.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/meta.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/slashes.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/updatePostCache.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/primePostCaches.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/wpAfterInsertPost.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/getPostStatus.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/option.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/getOptions.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/updateOption.php</file>

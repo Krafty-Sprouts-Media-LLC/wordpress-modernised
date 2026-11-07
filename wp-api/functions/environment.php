@@ -104,3 +104,29 @@ function is_admin()
 
     return false;
 }
+
+/**
+ * Determines if SSL is used.
+ *
+ * @since WM-0.5.0
+ * @since WP-2.6.0
+ * @since WP-4.6.0 Moved from functions.php to load.php.
+ *
+ * @return bool True if SSL, otherwise false.
+ */
+function is_ssl()
+{
+    if (isset($_SERVER['HTTPS'])) {
+        if (strtolower($_SERVER['HTTPS']) === 'on') {
+            return true;
+        }
+
+        if ((string) $_SERVER['HTTPS'] === '1') {
+            return true;
+        }
+    } elseif (isset($_SERVER['SERVER_PORT']) && ((string) $_SERVER['SERVER_PORT'] === '443')) {
+        return true;
+    }
+
+    return false;
+}

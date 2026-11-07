@@ -1680,3 +1680,839 @@ function _http_build_query($data, $prefix = null, $sep = null, $key = '', $urlen
 
     return implode($sep, $ret);
 }
+
+/**
+ * Determines if the variable is a numeric-indexed array.
+ *
+ * Note! This answers a different question than {@see array_is_list()} and is
+ *       more flexible to handle situations where some numeric array indices
+ *       have been removed. A numeric-indexed array is only a “list” when the
+ *       array keys form a contiguous range from zero to the highest key.
+ *
+ * Example:
+ *
+ *     true  === wp_is_numeric_array( array( 1, 2, 3, 4 ) );
+ *     false === wp_is_numeric_array( array( 'name' => 'WordPress' ) );
+ *
+ *     // All-numeric keys vs. list.
+ *     $above_two   = array_filter( array( 1, 2, 8, 9 ), fn ( $v ) => $v > 2 );
+ *     $above_two === array( '2' => 8, '3' => 9 );
+ *     true       === wp_is_numeric_array( $above_two );
+ *     false      === array_is_list( $above_two );
+ *
+ * @since WM-0.5.0
+ * @since WP-4.4.0
+ *
+ * @param  mixed  $data  Variable to check.
+ * @return bool Whether the variable is a list.
+ *
+ * @phpstan-assert-if-true array<int, mixed> $data
+ */
+function wp_is_numeric_array($data): bool
+{
+    if (! is_array($data)) {
+        return false;
+    }
+
+    return array_all($data, fn ($value, $key) => ! is_string($key));
+}
+
+/**
+ * Retrieves a modified URL query string.
+ *
+ * You can rebuild the URL and append query variables to the URL query by using this function.
+ * There are two ways to use this function; either a single key and value, or an associative array.
+ *
+ * Using a single key and value:
+ *
+ *     add_query_arg( 'key', 'value', 'http://example.com' );
+ *
+ * Using an associative array:
+ *
+ *     add_query_arg( array(
+ *         'key1' => 'value1',
+ *         'key2' => 'value2',
+ *     ), 'http://example.com' );
+ *
+ * Omitting the URL from either use results in the current URL being used
+ * (the value of `$_SERVER['REQUEST_URI']`).
+ *
+ * Values are expected to be encoded appropriately with urlencode() or rawurlencode().
+ *
+ * Setting any query variable's value to boolean false removes the key (see remove_query_arg()).
+ *
+ * Important: The return value of add_query_arg() is not escaped by default. Output should be
+ * late-escaped with esc_url() or similar to help prevent vulnerability to cross-site scripting
+ * (XSS) attacks.
+ *
+ * @since WM-0.5.0
+ * @since WP-1.5.0
+ * @since WP-5.3.0 Formalized the existing and already documented parameters
+ *              by adding `...$args` to the function signature.
+ *
+ * @param  string|array  $key  Either a query variable key, or an associative array of query variables.
+ * @param  string  $value  Optional. Either a query variable value, or a URL to act upon.
+ * @param  string  $url  Optional. A URL to act upon.
+ * @return string New URL query string (unescaped).
+ */
+function add_query_arg(...$args)
+{
+    if (is_array($args[0])) {
+        if (count($args) < 2 || $args[1] === false) {
+            $uri = $_SERVER['REQUEST_URI'];
+        } else {
+            $uri = $args[1];
+        }
+    } else {
+        if (count($args) < 3 || $args[2] === false) {
+            $uri = $_SERVER['REQUEST_URI'];
+        } else {
+            $uri = $args[2];
+        }
+    }
+
+    $frag = strstr($uri, '#');
+    if ($frag) {
+        $uri = substr($uri, 0, -strlen($frag));
+    } else {
+        $frag = '';
+    }
+
+    if (stripos($uri, 'http://') === 0) {
+        $protocol = 'http://';
+        $uri = substr($uri, 7);
+    } elseif (stripos($uri, 'https://') === 0) {
+        $protocol = 'https://';
+        $uri = substr($uri, 8);
+    } else {
+        $protocol = '';
+    }
+
+    if (str_contains($uri, '?')) {
+        [$base, $query] = explode('?', $uri, 2);
+        $base .= '?';
+    } elseif ($protocol || ! str_contains($uri, '=')) {
+        $base = $uri.'?';
+        $query = '';
+    } else {
+        $base = '';
+        $query = $uri;
+    }
+
+    wp_parse_str($query, $qs);
+    $qs = urlencode_deep($qs); // This re-URL-encodes things that were already in the query string.
+    if (is_array($args[0])) {
+        foreach ($args[0] as $k => $v) {
+            $qs[$k] = $v;
+        }
+    } else {
+        $qs[$args[0]] = $args[1];
+    }
+
+    foreach ($qs as $k => $v) {
+        if ($v === false) {
+            unset($qs[$k]);
+        }
+    }
+
+    $ret = build_query($qs);
+    $ret = trim($ret, '?');
+    $ret = preg_replace('#=(&|$)#', '$1', $ret);
+    $ret = $protocol.$base.$ret.$frag;
+    $ret = rtrim($ret, '?');
+    $ret = str_replace('?#', '#', $ret);
+
+    return $ret;
+}
+
+/**
+ * Removes an item or items from a query string.
+ *
+ * Important: The return value of remove_query_arg() is not escaped by default. Output should be
+ * late-escaped with esc_url() or similar to help prevent vulnerability to cross-site scripting
+ * (XSS) attacks.
+ *
+ * @since WM-0.5.0
+ * @since WP-1.5.0
+ *
+ * @param  string|string[]  $key  Query key or keys to remove.
+ * @param  false|string  $query  Optional. When false uses the current URL. Default false.
+ * @return string New URL query string.
+ */
+function remove_query_arg($key, $query = false)
+{
+    if (is_array($key)) { // Removing multiple keys.
+        foreach ($key as $k) {
+            $query = add_query_arg($k, false, $query);
+        }
+
+        return $query;
+    }
+
+    return add_query_arg($key, false, $query);
+}
+
+/**
+ * Finds hierarchy loops using a callback function that maps object IDs to parent IDs.
+ *
+ * @since WM-0.5.0
+ * @since WP-3.1.0
+ *
+ * @param  callable  $callback  Function that accepts ( ID, $callback_args ) and outputs parent_ID.
+ * @param  int  $start  The ID to start the loop check at.
+ * @param  int  $start_parent  The parent_ID of $start to use instead of calling $callback( $start ).
+ *                             Use null to always use $callback.
+ * @param  array  $callback_args  Optional. Additional arguments to send to $callback. Default empty array.
+ * @return array IDs of all members of loop.
+ */
+function wp_find_hierarchy_loop($callback, $start, $start_parent, $callback_args = [])
+{
+    $override = is_null($start_parent) ? [] : [$start => $start_parent];
+
+    $arbitrary_loop_member = wp_find_hierarchy_loop_tortoise_hare($callback, $start, $override, $callback_args);
+    if (! $arbitrary_loop_member) {
+        return [];
+    }
+
+    return wp_find_hierarchy_loop_tortoise_hare($callback, $arbitrary_loop_member, $override, $callback_args, true);
+}
+
+/**
+ * Uses the "The Tortoise and the Hare" algorithm to detect loops.
+ *
+ * For every step of the algorithm, the hare takes two steps and the tortoise one.
+ * If the hare ever laps the tortoise, there must be a loop.
+ *
+ * @since WM-0.5.0
+ * @since WP-3.1.0
+ *
+ * @param  callable  $callback  Function that accepts ( ID, callback_arg, ... ) and outputs parent_ID.
+ * @param  int  $start  The ID to start the loop check at.
+ * @param  array  $override  Optional. An array of ( ID => parent_ID, ... ) to use instead of $callback.
+ *                           Default empty array.
+ * @param  array  $callback_args  Optional. Additional arguments to send to $callback. Default empty array.
+ * @param  bool  $_return_loop  Optional. Return loop members or just detect presence of loop? Only set
+ *                              to true if you already know the given $start is part of a loop (otherwise
+ *                              the returned array might include branches). Default false.
+ * @return mixed Scalar ID of some arbitrary member of the loop, or array of IDs of all members of loop if
+ *               $_return_loop
+ */
+function wp_find_hierarchy_loop_tortoise_hare($callback, $start, $override = [], $callback_args = [], $_return_loop = false)
+{
+    $tortoise = $start;
+    $hare = $start;
+    $evanescent_hare = $start;
+    $return = [];
+
+    // Set evanescent_hare to one past hare. Increment hare two steps.
+    while (
+        $tortoise
+    &&
+        ($evanescent_hare = $override[$hare] ?? call_user_func_array($callback, array_merge([$hare], $callback_args)))
+    &&
+        ($hare = $override[$evanescent_hare] ?? call_user_func_array($callback, array_merge([$evanescent_hare], $callback_args)))
+    ) {
+        if ($_return_loop) {
+            $return[$tortoise] = true;
+            $return[$evanescent_hare] = true;
+            $return[$hare] = true;
+        }
+
+        // Tortoise got lapped - must be a loop.
+        if ($tortoise === $evanescent_hare || $tortoise === $hare) {
+            return $_return_loop ? $return : $tortoise;
+        }
+
+        // Increment tortoise by one step.
+        $tortoise = $override[$tortoise] ?? call_user_func_array($callback, array_merge([$tortoise], $callback_args));
+    }
+
+    return false;
+}
+
+/**
+ * Parses a string into variables to be stored in an array.
+ *
+ * @since WM-0.5.0
+ * @since WP-2.2.1
+ *
+ * @param  string  $input_string  The string to be parsed.
+ * @param  array  $result  Variables will be stored in this array.
+ */
+function wp_parse_str($input_string, &$result)
+{
+    parse_str((string) $input_string, $result);
+
+    /**
+     * Filters the array of variables derived from a parsed string.
+     *
+     * @since WP-2.2.1
+     *
+     * @param  array  $result  The array populated with variables.
+     */
+    $result = apply_filters('wp_parse_str', $result);
+}
+
+/**
+ * Navigates through an array, object, or scalar, and encodes the values to be used in a URL.
+ *
+ * @since WM-0.5.0
+ * @since WP-2.2.0
+ *
+ * @param  mixed  $value  The array or string to be encoded.
+ * @return mixed The encoded value.
+ */
+function urlencode_deep($value)
+{
+    return map_deep($value, 'urlencode');
+}
+
+/**
+ * Determines whether to force SSL used for the Administration Screens.
+ *
+ * @since WM-0.5.0
+ * @since WP-2.6.0
+ *
+ * @param  string|bool|null  $force  Optional. Whether to force SSL in admin screens. Default null.
+ * @return bool True if forced, false if not forced.
+ */
+function force_ssl_admin($force = null)
+{
+    static $forced = false;
+
+    if (! is_null($force)) {
+        $old_forced = $forced;
+        $forced = (bool) $force;
+
+        return $old_forced;
+    }
+
+    return $forced;
+}
+
+/**
+ * Sanitizes space or carriage return separated URLs that are used to send trackbacks.
+ *
+ * @since WM-0.5.0
+ * @since WP-3.4.0
+ *
+ * @param  string  $to_ping  Space or carriage return separated URLs
+ * @return string URLs starting with the http or https protocol, separated by a carriage return.
+ */
+function sanitize_trackback_urls($to_ping)
+{
+    $urls_to_ping = preg_split('/[\r\n\t ]/', trim($to_ping), -1, PREG_SPLIT_NO_EMPTY);
+    foreach ($urls_to_ping as $k => $url) {
+        if (! preg_match('#^https?://.#i', $url)) {
+            unset($urls_to_ping[$k]);
+        }
+    }
+    $urls_to_ping = array_map('sanitize_url', $urls_to_ping);
+    $urls_to_ping = implode("\n", $urls_to_ping);
+
+    /**
+     * Filters a list of trackback URLs following sanitization.
+     *
+     * The string returned here consists of a space or carriage return-delimited list
+     * of trackback URLs.
+     *
+     * @since WP-3.4.0
+     *
+     * @param  string  $urls_to_ping  Sanitized space or carriage return separated URLs.
+     * @param  string  $to_ping  Space or carriage return separated URLs before sanitization.
+     */
+    return apply_filters('sanitize_trackback_urls', $urls_to_ping, $to_ping);
+}
+
+/**
+ * Checks and cleans a URL.
+ *
+ * A number of characters are removed from the URL. If the URL is for displaying
+ * (the default behavior) ampersands are also replaced. The {@see 'clean_url'} filter
+ * is applied to the returned cleaned URL.
+ *
+ * @since WM-0.5.0
+ * @since WP-2.8.0
+ * @since WP-6.9.0 Prepends `https://` to the URL if it does not already contain a scheme
+ *              and the first item in `$protocols` is 'https'.
+ *
+ * @param  string  $url  The URL to be cleaned.
+ * @param  string[]  $protocols  Optional. An array of acceptable protocols.
+ *                               Defaults to return value of wp_allowed_protocols().
+ * @param  string  $_context  Private. Use sanitize_url() for database usage.
+ * @return string The cleaned URL after the {@see 'clean_url'} filter is applied.
+ *                An empty string is returned if `$url` specifies a protocol other than
+ *                those in `$protocols`, or if `$url` contains an empty string.
+ */
+function esc_url($url, $protocols = null, $_context = 'display')
+{
+    $original_url = $url;
+
+    if ($url === '') {
+        return $url;
+    }
+
+    $url = str_replace(' ', '%20', ltrim($url));
+    $url = preg_replace('|[^a-z0-9-~+_.?#=!&;,/:%@$\|*\'()\[\]\\x80-\\xff]|i', '', $url);
+
+    if ($url === '') {
+        return $url;
+    }
+
+    if (stripos($url, 'mailto:') !== 0) {
+        $strip = ['%0d', '%0a', '%0D', '%0A'];
+        $url = _deep_replace($strip, $url);
+    }
+
+    $url = str_replace(';//', '://', $url);
+    /*
+     * If the URL doesn't appear to contain a scheme, we presume
+     * it needs http:// prepended (unless it's a relative link
+     * starting with /, # or ?, or a PHP file). If the first item
+     * in $protocols is 'https', then https:// is prepended.
+     */
+    if (! str_contains($url, ':') && ! in_array($url[0], ['/', '#', '?'], true) &&
+        ! preg_match('/^[a-z0-9-]+?\.php/i', $url)
+    ) {
+        $scheme = (is_array($protocols) && array_first($protocols) === 'https') ? 'https://' : 'http://';
+        $url = $scheme.$url;
+    }
+
+    // Replace ampersands and single quotes only when displaying.
+    if ($_context === 'display') {
+        $url = wp_kses_normalize_entities($url);
+        $url = str_replace('&amp;', '&#038;', $url);
+        $url = str_replace("'", '&#039;', $url);
+    }
+
+    if (str_contains($url, '[') || str_contains($url, ']')) {
+
+        $parsed = wp_parse_url($url);
+        $front = '';
+
+        if (isset($parsed['scheme'])) {
+            $front .= $parsed['scheme'].'://';
+        } elseif ($url[0] === '/') {
+            $front .= '//';
+        }
+
+        if (isset($parsed['user'])) {
+            $front .= $parsed['user'];
+        }
+
+        if (isset($parsed['pass'])) {
+            $front .= ':'.$parsed['pass'];
+        }
+
+        if (isset($parsed['user']) || isset($parsed['pass'])) {
+            $front .= '@';
+        }
+
+        if (isset($parsed['host'])) {
+            $front .= $parsed['host'];
+        }
+
+        if (isset($parsed['port'])) {
+            $front .= ':'.$parsed['port'];
+        }
+
+        $end_dirty = str_replace($front, '', $url);
+        $end_clean = str_replace(['[', ']'], ['%5B', '%5D'], $end_dirty);
+        $url = str_replace($end_dirty, $end_clean, $url);
+
+    }
+
+    if ($url[0] === '/') {
+        $good_protocol_url = $url;
+    } else {
+        if (! is_array($protocols)) {
+            $protocols = wp_allowed_protocols();
+        }
+        $good_protocol_url = wp_kses_bad_protocol($url, $protocols);
+        if (strtolower($good_protocol_url) !== strtolower($url)) {
+            return '';
+        }
+    }
+
+    /**
+     * Filters a string cleaned and escaped for output as a URL.
+     *
+     * @since WP-2.3.0
+     *
+     * @param  string  $good_protocol_url  The cleaned URL to be returned.
+     * @param  string  $original_url  The URL prior to cleaning.
+     * @param  string  $_context  If 'display', replace ampersands and single quotes only.
+     */
+    return apply_filters('clean_url', $good_protocol_url, $original_url, $_context);
+}
+
+/**
+ * Sanitizes a URL for database or redirect usage.
+ *
+ * @since WM-0.5.0
+ * @since WP-2.3.1
+ * @since WP-2.8.0 Deprecated in favor of esc_url_raw().
+ * @since WP-5.9.0 Restored (un-deprecated).
+ * @since WP-6.9.0 Prepends `https://` to the URL if it does not already contain a scheme
+ *              and the first item in `$protocols` is 'https'.
+ * @see esc_url()
+ *
+ * @param  string  $url  The URL to be cleaned.
+ * @param  string[]  $protocols  Optional. An array of acceptable protocols.
+ *                               Defaults to return value of wp_allowed_protocols().
+ * @return string The cleaned URL after esc_url() is run with the 'db' context.
+ */
+function sanitize_url($url, $protocols = null)
+{
+    return esc_url($url, $protocols, 'db');
+}
+
+/**
+ * Performs a deep string replace operation to ensure the values in $search are no longer present.
+ *
+ * Repeats the replacement operation until it no longer replaces anything to remove "nested" values
+ * e.g. $subject = '%0%0%0DDD', $search ='%0D', $result ='' rather than the '%0%0DD' that
+ * str_replace would return
+ *
+ * @since WM-0.5.0
+ * @since WP-2.8.1
+ *
+ * @param  string|array  $search  The value being searched for, otherwise known as the needle.
+ *                                An array may be used to designate multiple needles.
+ * @param  string  $subject  The string being searched and replaced on, otherwise known as the haystack.
+ * @return string The string with the replaced values.
+ */
+function _deep_replace($search, $subject)
+{
+    $subject = (string) $subject;
+
+    $count = 1;
+    while ($count) {
+        $subject = str_replace($search, '', $subject, $count);
+    }
+
+    return $subject;
+}
+
+/**
+ * Retrieves a list of protocols to allow in HTML attributes.
+ *
+ * @since WM-0.5.0
+ * @since WP-3.3.0
+ * @since WP-4.3.0 Added 'webcal' to the protocols array.
+ * @since WP-4.7.0 Added 'urn' to the protocols array.
+ * @since WP-5.3.0 Added 'sms' to the protocols array.
+ * @since WP-5.6.0 Added 'irc6' and 'ircs' to the protocols array.
+ * @see wp_kses()
+ * @see esc_url()
+ *
+ * @return string[] Array of allowed protocols. Defaults to an array containing 'http', 'https',
+ *                  'ftp', 'ftps', 'mailto', 'news', 'irc', 'irc6', 'ircs', 'gopher', 'nntp', 'feed',
+ *                  'telnet', 'mms', 'rtsp', 'sms', 'svn', 'tel', 'fax', 'xmpp', 'webcal', and 'urn'.
+ *                  This covers all common link protocols, except for 'javascript' which should not
+ *                  be allowed for untrusted users.
+ */
+function wp_allowed_protocols()
+{
+    static $protocols = [];
+
+    if (empty($protocols)) {
+        $protocols = ['http', 'https', 'ftp', 'ftps', 'mailto', 'news', 'irc', 'irc6', 'ircs', 'gopher', 'nntp', 'feed', 'telnet', 'mms', 'rtsp', 'sms', 'svn', 'tel', 'fax', 'xmpp', 'webcal', 'urn'];
+    }
+
+    if (! did_action('wp_loaded')) {
+        /**
+         * Filters the list of protocols allowed in HTML attributes.
+         *
+         * @since WP-3.0.0
+         *
+         * @param  string[]  $protocols  Array of allowed protocols e.g. 'http', 'ftp', 'tel', and more.
+         */
+        $protocols = array_unique((array) apply_filters('kses_allowed_protocols', $protocols));
+    }
+
+    return $protocols;
+}
+
+/**
+ * A wrapper for PHP's parse_url() function that handles consistency in the return values
+ * across PHP versions.
+ *
+ * Across various PHP versions, schemeless URLs containing a ":" in the query
+ * are being handled inconsistently. This function works around those differences.
+ *
+ * @since WM-0.5.0
+ * @since WP-4.4.0
+ * @since WP-4.7.0 The `$component` parameter was added for parity with PHP's `parse_url()`.
+ * @link https://www.php.net/manual/en/function.parse-url.php
+ *
+ * @param  string  $url  The URL to parse.
+ * @param  int  $component  The specific component to retrieve. Use one of the PHP
+ *                          predefined constants to specify which one.
+ *                          Defaults to -1 (= return all parts as an array).
+ *
+ * @phpstan-param int<-1, 7> $component
+ *
+ * @return mixed False on parse failure; Array of URL components on success;
+ *               When a specific component has been requested: null if the component
+ *               doesn't exist in the given URL; a string or - in the case of
+ *               PHP_URL_PORT - integer when it does. See parse_url()'s return values.
+ *
+ * @phpstan-return (
+ *     $component is -1
+ *         ? false|array{
+ *               scheme?: string,
+ *               host?: string,
+ *               port?: int<0, 65535>,
+ *               user?: string,
+ *               pass?: string,
+ *               path?: string,
+ *               query?: string,
+ *               fragment?: string,
+ *           }
+ *         : (
+ *             $component is 2
+ *                 ? int<0, 65535>|null
+ *                 : string|null
+ *         )
+ * )
+ */
+function wp_parse_url($url, $component = -1)
+{
+    $to_unset = [];
+    $url = (string) $url;
+
+    if (str_starts_with($url, '//')) {
+        $to_unset[] = 'scheme';
+        $url = 'placeholder:'.$url;
+    } elseif (str_starts_with($url, '/')) {
+        $to_unset[] = 'scheme';
+        $to_unset[] = 'host';
+        $url = 'placeholder://placeholder'.$url;
+    }
+
+    $parts = parse_url($url);
+
+    if ($parts === false) {
+        // Parsing failure.
+        return $parts;
+    }
+
+    // Remove the placeholder values.
+    foreach ($to_unset as $key) {
+        unset($parts[$key]);
+    }
+
+    return _get_component_from_parsed_url_array($parts, $component);
+}
+
+/**
+ * Retrieves a specific component from a parsed URL array.
+ *
+ * @internal
+ *
+ * @since WM-0.5.0
+ * @since WP-4.7.0
+ * @link https://www.php.net/manual/en/function.parse-url.php
+ *
+ * @param  array|false  $url_parts  The parsed URL. Can be false if the URL failed to parse.
+ * @param  int  $component  The specific component to retrieve. Use one of the PHP
+ *                          predefined constants to specify which one.
+ *                          Defaults to -1 (= return all parts as an array).
+ *
+ * @phpstan-param false|array{
+ *     scheme?: string,
+ *     host?: string,
+ *     port?: int<0, 65535>,
+ *     user?: string,
+ *     pass?: string,
+ *     path?: string,
+ *     query?: string,
+ *     fragment?: string,
+ * } $url_parts
+ * @phpstan-param int<-1, 7> $component
+ *
+ * @return mixed False on parse failure; Array of URL components on success;
+ *               When a specific component has been requested: null if the component
+ *               doesn't exist in the given URL; a string or - in the case of
+ *               PHP_URL_PORT - integer when it does. See parse_url()'s return values.
+ *
+ * @phpstan-return (
+ *     $component is -1
+ *         ? false|array{
+ *               scheme?: string,
+ *               host?: string,
+ *               port?: int<0, 65535>,
+ *               user?: string,
+ *               pass?: string,
+ *               path?: string,
+ *               query?: string,
+ *               fragment?: string,
+ *           }
+ *         : (
+ *             $component is 2
+ *                 ? int<0, 65535>|null
+ *                 : string|null
+ *         )
+ * )
+ */
+function _get_component_from_parsed_url_array($url_parts, $component = -1)
+{
+    if ($component === -1) {
+        return $url_parts;
+    }
+
+    $key = _wp_translate_php_url_constant_to_key($component);
+    if ($key !== false && is_array($url_parts) && isset($url_parts[$key])) {
+        return $url_parts[$key];
+    } else {
+        return null;
+    }
+}
+
+/**
+ * Translates a PHP_URL_* constant to the named array keys PHP uses.
+ *
+ * @internal
+ *
+ * @since WM-0.5.0
+ * @since WP-4.7.0
+ * @link https://www.php.net/manual/en/url.constants.php
+ *
+ * @param  int  $constant  PHP_URL_* constant.
+ *
+ * @phpstan-param int<-1, 7> $constant
+ *
+ * @return string|false The named key or false.
+ *
+ * @phpstan-return 'scheme'|'host'|'port'|'user'|'pass'|'path'|'query'|'fragment'|false
+ */
+function _wp_translate_php_url_constant_to_key($constant)
+{
+    $translation = [
+        PHP_URL_SCHEME => 'scheme',
+        PHP_URL_HOST => 'host',
+        PHP_URL_PORT => 'port',
+        PHP_URL_USER => 'user',
+        PHP_URL_PASS => 'pass',
+        PHP_URL_PATH => 'path',
+        PHP_URL_QUERY => 'query',
+        PHP_URL_FRAGMENT => 'fragment',
+    ];
+
+    return $translation[$constant] ?? false;
+}
+
+if (! function_exists('array_first')) {
+    /**
+     * Polyfill for `array_first()` function added in PHP 8.5.
+     *
+     * Returns the first element of an array.
+     *
+     * @since WM-0.5.0
+     * @since WP-6.9.0
+     *
+     * @param  array  $array  The array to get the first element from.
+     * @return mixed|null The first element of the array, or null if the array is empty.
+     */
+    function array_first(array $array) // phpcs:ignore Universal.NamingConventions.NoReservedKeywordParameterNames.arrayFound
+    {
+        if (empty($array)) {
+            return null;
+        }
+
+        foreach ($array as $value) {
+            return $value;
+        }
+    }
+}
+
+/**
+ * Retrieves IDs that are not already present in the cache.
+ *
+ * @since WM-0.5.0
+ * @since WP-3.4.0
+ * @since WP-6.1.0 This function is no longer marked as "private".
+ *
+ * @param  int[]  $object_ids  Array of IDs.
+ * @param  string  $cache_group  The cache group to check against.
+ * @return int[] Array of IDs not present in the cache.
+ */
+function _get_non_cached_ids($object_ids, $cache_group)
+{
+    $object_ids = array_filter($object_ids, '_validate_cache_id');
+    $object_ids = array_unique(array_map('intval', $object_ids), SORT_NUMERIC);
+
+    if (empty($object_ids)) {
+        return [];
+    }
+
+    $non_cached_ids = [];
+    $cache_values = wp_cache_get_multiple($object_ids, $cache_group);
+
+    foreach ($cache_values as $id => $value) {
+        if ($value === false) {
+            $non_cached_ids[] = (int) $id;
+        }
+    }
+
+    return $non_cached_ids;
+}
+
+/**
+ * Escapes single quotes, `"`, `<`, `>`, `&`, and fixes line endings.
+ *
+ * Escapes text strings for echoing in JS. It is intended to be used for inline JS
+ * (in a tag attribute, for example `onclick="..."`). Note that the strings have to
+ * be in single quotes. The {@see 'js_escape'} filter is also applied here.
+ *
+ * @since WM-0.5.0
+ * @since WP-2.8.0
+ *
+ * @param  string  $text  The text to be escaped.
+ * @return string Escaped text.
+ */
+function esc_js($text)
+{
+    $safe_text = wp_check_invalid_utf8($text);
+    $safe_text = _wp_specialchars($safe_text, ENT_COMPAT);
+    $safe_text = preg_replace('/&#(x)?0*(?(1)27|39);?/i', "'", stripslashes($safe_text));
+    $safe_text = str_replace("\r", '', $safe_text);
+    $safe_text = str_replace("\n", '\\n', addslashes($safe_text));
+
+    /**
+     * Filters a string cleaned and escaped for output in JavaScript.
+     *
+     * Text passed to esc_js() is stripped of invalid or special characters,
+     * and properly slashed for output.
+     *
+     * @since WP-2.0.6
+     *
+     * @param  string  $safe_text  The text after it has been escaped.
+     * @param  string  $text  The text prior to being escaped.
+     */
+    return apply_filters('js_escape', $safe_text, $text);
+}
+
+/**
+ * Add leading zeros when necessary.
+ *
+ * If you set the threshold to '4' and the number is '10', then you will get
+ * back '0010'. If you set the threshold to '4' and the number is '5000', then you
+ * will get back '5000'.
+ *
+ * Uses sprintf to append the amount of zeros based on the $threshold parameter
+ * and the size of the number. If the number is large enough, then no zeros will
+ * be appended.
+ *
+ * @since WM-0.5.0
+ * @since WP-0.71
+ *
+ * @param  int  $number  Number to append zeros to if not greater than threshold.
+ * @param  int  $threshold  Digit places number needs to be to not have zeros added.
+ * @return string Adds leading zeros to number if needed.
+ */
+function zeroise($number, $threshold)
+{
+    return sprintf('%0'.$threshold.'s', $number);
+}

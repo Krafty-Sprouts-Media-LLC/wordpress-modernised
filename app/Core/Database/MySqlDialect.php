@@ -49,6 +49,20 @@ final class MySqlDialect implements Dialect
         return $row;
     }
 
+    public function toStorage(string $table, array $values): array
+    {
+        return $values;
+    }
+
+    public function fromStorage(string $table, stdClass $row): stdClass
+    {
+        foreach (get_object_vars($row) as $name => $value) {
+            $row->{$name} = $value === null ? null : (string) $value;
+        }
+
+        return $row;
+    }
+
     public function mapColumns(array $columns): array
     {
         return $columns;

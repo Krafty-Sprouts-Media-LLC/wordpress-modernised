@@ -696,3 +696,56 @@ function wp_suspend_cache_invalidation($suspend = true)
 
     return $current_suspend;
 }
+
+/**
+ * Gets last changed date for the specified cache group.
+ *
+ * @since WM-0.5.0
+ * @since WP-4.7.0
+ *
+ * @param  string  $group  Where the cache contents are grouped.
+ * @return string UNIX timestamp with microseconds representing when the group was last changed.
+ */
+function wp_cache_get_last_changed($group)
+{
+    $last_changed = wp_cache_get('last_changed', $group);
+
+    if ($last_changed) {
+        return $last_changed;
+    }
+
+    return wp_cache_set_last_changed($group);
+}
+
+/**
+ * Sets last changed date for the specified cache group to now.
+ *
+ * @since WM-0.5.0
+ * @since WP-6.3.0
+ *
+ * @param  string  $group  Where the cache contents are grouped.
+ * @return string UNIX timestamp when the group was last changed.
+ */
+function wp_cache_set_last_changed($group)
+{
+    $previous_time = wp_cache_get('last_changed', $group);
+
+    $time = microtime();
+
+    wp_cache_set('last_changed', $time, $group);
+
+    /**
+     * Fires after a cache group `last_changed` time is updated.
+     * This may occur multiple times per page load and registered
+     * actions must be performant.
+     *
+     * @since WP-6.3.0
+     *
+     * @param  string  $group  The cache group name.
+     * @param  string  $time  The new last changed time (msec sec).
+     * @param  string|false  $previous_time  The previous last changed time. False if not previously set.
+     */
+    do_action('wp_cache_set_last_changed', $group, $time, $previous_time);
+
+    return $time;
+}

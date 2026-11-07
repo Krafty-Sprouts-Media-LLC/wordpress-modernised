@@ -106,5 +106,6 @@ require WP_TESTS_CHECKOUT.'/tests/phpunit/includes/utils.php';
 require WP_TESTS_CHECKOUT.'/tests/phpunit/includes/mock-invokable.php';
 require WP_TESTS_CHECKOUT.'/tests/phpunit/includes/phpunit6/compat.php';
 require WP_TESTS_CHECKOUT.'/tests/phpunit/includes/exceptions.php';
+require WP_TESTS_CHECKOUT.'/tests/phpunit/includes/factory.php';
 
 require __DIR__.'/includes/WP_UnitTestCase.php';

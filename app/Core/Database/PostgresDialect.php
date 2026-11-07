@@ -148,6 +148,40 @@ final class PostgresDialect implements Dialect
         return $mapped;
     }
 
+    public function toStorage(string $table, array $values): array
+    {
+        $rules = $this->rulesFor($table);
+        $stored = [];
+
+        foreach ($values as $name => $value) {
+            $column = strtolower($name);
+
+            if ($rules !== null && $value === '0000-00-00 00:00:00' && in_array($column, $rules['dates'], true)) {
+                $value = null;
+            }
+
+            $stored[$column] = $value;
+        }
+
+        return $stored;
+    }
+
+    public function fromStorage(string $table, stdClass $row): stdClass
+    {
+        $mapped = $this->mapRow($row, array_fill_keys(array_keys(get_object_vars($row)), $table));
+
+        foreach (get_object_vars($mapped) as $name => $value) {
+            $mapped->{$name} = match (true) {
+                $value === null => null,
+                is_bool($value) => $value ? '1' : '0',
+                is_float($value) => var_export($value, true),
+                default => (string) $value,
+            };
+        }
+
+        return $mapped;
+    }
+
     public function mapColumns(array $columns): array
     {
         return array_map(function (stdClass $column): stdClass {

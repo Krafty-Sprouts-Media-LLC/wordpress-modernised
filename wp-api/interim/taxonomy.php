@@ -117,3 +117,59 @@ if (! function_exists('unregister_taxonomy_for_object_type')) {
         return false;
     }
 }
+
+if (! function_exists('wp_delete_object_term_relationships')) {
+    /**
+     * Unlinks the object from the taxonomy or taxonomies.
+     *
+     * Stand-in: there are no taxonomies yet, so there are no links to remove.
+     *
+     * @since WM-0.5.0
+     * @since WP-2.3.0
+     *
+     * @param  int  $object_id  The term object ID that refers to the term.
+     * @param  string|array  $taxonomies  List of taxonomy names or single taxonomy name.
+     */
+    function wp_delete_object_term_relationships($object_id, $taxonomies)
+    {
+        // Nothing to remove until the terms step.
+    }
+}
+
+if (! function_exists('clean_object_term_cache')) {
+    /**
+     * Removes the taxonomy relationship to terms from the cache.
+     *
+     * Stand-in: there are no taxonomies yet, so nothing is cached.
+     *
+     * @since WM-0.5.0
+     * @since WP-2.3.0
+     *
+     * @param  int|array  $object_ids  Single or list of term object ID(s).
+     * @param  array|string  $object_type  The taxonomy object type.
+     */
+    function clean_object_term_cache($object_ids, $object_type)
+    {
+        // Nothing cached until the terms step.
+    }
+}
+
+if (! function_exists('update_object_term_cache')) {
+    /**
+     * Updates the cache for the given term object ID(s).
+     *
+     * Stand-in: there are no taxonomies yet, so there is nothing to cache.
+     *
+     * @since WM-0.5.0
+     * @since WP-2.3.0
+     *
+     * @param  string|int[]  $object_ids  Comma-separated list or array of term object IDs.
+     * @param  string|string[]  $object_type  The taxonomy object type or array of the same.
+     * @return void|false Void on success or if the `$object_ids` parameter is empty,
+     *                    false if all of the terms in `$object_ids` are already cached.
+     */
+    function update_object_term_cache($object_ids, $object_type)
+    {
+        // Nothing to cache until the terms step.
+    }
+}

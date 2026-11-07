@@ -28,6 +28,12 @@ foreach ([
     'WEEK_IN_SECONDS' => 7 * 24 * 60 * 60,
     'MONTH_IN_SECONDS' => 30 * 24 * 60 * 60,
     'YEAR_IN_SECONDS' => 365 * 24 * 60 * 60,
+    // Functionality defaults (wp_functionality_constants()); a site can define
+    // them first to change them, as in wp-config.php.
+    'AUTOSAVE_INTERVAL' => 60,
+    'EMPTY_TRASH_DAYS' => 30,
+    'WP_POST_REVISIONS' => true,
+    'WP_CRON_LOCK_TIMEOUT' => 60,
     // Permalink endpoint masks (rewrite.php), read when a post type is registered.
     'EP_NONE' => 0,
     'EP_PERMALINK' => 1,

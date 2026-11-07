@@ -12,20 +12,3 @@ if (! class_exists('wpdb')) {
      */
     class wpdb {}
 }
-
-if (! class_exists('WP_Post')) {
-    /**
-     * Stand-in for WP_Post: copies the given fields onto itself. The hooks
-     * tests only pass it around as a value. Replaced when posts are built.
-     */
-    #[AllowDynamicProperties]
-    final class WP_Post
-    {
-        public function __construct($post)
-        {
-            foreach (get_object_vars($post) as $key => $value) {
-                $this->$key = $value;
-            }
-        }
-    }
-}

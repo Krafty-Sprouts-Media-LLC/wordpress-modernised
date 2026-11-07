@@ -74,4 +74,23 @@ interface Dialect
      * @return array{0: int, 1: string}
      */
     public function error(array $errorInfo, string $fallbackMessage): array;
+
+    /**
+     * A row of one of WordPress's tables, as WordPress shapes it, turned into
+     * what the database stores: for house repositories writing through
+     * Laravel's query builder. Also used for where-clauses.
+     *
+     * @param  string  $table  The full table name (with prefix).
+     * @param  array<string, mixed>  $values  Column => value, with WordPress's column names.
+     * @return array<string, mixed>
+     */
+    public function toStorage(string $table, array $values): array;
+
+    /**
+     * A row read through Laravel's query builder, shaped as $wpdb gives it to
+     * WordPress: WordPress's column names, every value as text (NULL stays NULL).
+     *
+     * @param  string  $table  The full table name (with prefix).
+     */
+    public function fromStorage(string $table, stdClass $row): stdClass;
 }
