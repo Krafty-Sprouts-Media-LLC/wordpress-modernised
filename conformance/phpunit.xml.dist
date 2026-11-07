@@ -48,6 +48,11 @@
             <file>wordpress-develop/tests/phpunit/tests/date/currentTime.php</file>
             <file>wordpress-develop/tests/phpunit/tests/date/wpCheckdate.php</file>
             <file>wordpress-develop/tests/phpunit/tests/date/wpTimezone.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/types.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/wpPostType.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/getPostTypeLabels.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/isPostTypeViewable.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/post/isPostStatusViewable.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/option.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/getOptions.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/updateOption.php</file>

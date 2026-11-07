@@ -21,6 +21,8 @@ require __DIR__.'/interim/kses.php';
 require __DIR__.'/interim/l10n.php';
 require __DIR__.'/interim/multisite.php';
 require __DIR__.'/interim/sanitize-option.php';
+require __DIR__.'/interim/taxonomy.php';
+require __DIR__.'/interim/users.php';
 
 require __DIR__.'/classes/WP_Hook.php';
 require __DIR__.'/classes/WP_Filter_Sentinel.php';
@@ -29,6 +31,7 @@ require __DIR__.'/classes/WP_Error.php';
 require __DIR__.'/classes/WP_List_Util.php';
 require __DIR__.'/classes/wpdb.php';
 require __DIR__.'/classes/WP_Object_Cache.php';
+require __DIR__.'/classes/WP_Post_Type.php';
 
 require __DIR__.'/functions/hooks.php';
 require __DIR__.'/functions/errors.php';
@@ -43,6 +46,7 @@ require __DIR__.'/functions/dates.php';
 require __DIR__.'/functions/cache.php';
 require __DIR__.'/functions/database.php';
 require __DIR__.'/functions/option.php';
+require __DIR__.'/functions/post-types.php';
 require __DIR__.'/functions/db-delta.php';
 require __DIR__.'/functions/schema.php';
 require __DIR__.'/functions/deprecated.php';

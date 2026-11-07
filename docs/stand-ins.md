@@ -7,6 +7,9 @@
 | Stand-in | Where | What it lacks compared with WordPress | Replaced by |
 |---|---|---|---|
 | `wp_kses()` | `wp-api/interim/kses.php` | Keeps allowed tags but does not filter attributes or URL protocols. Only `wp_trigger_error()` uses it, on its own messages | The HTML-filtering (kses) step |
+| `get_object_taxonomies()`, `is_object_in_taxonomy()`, `taxonomy_exists()`, `get_taxonomy()`, `register_taxonomy_for_object_type()`, `unregister_taxonomy_for_object_type()` | `wp-api/interim/taxonomy.php` | Answer "there are no taxonomies", so posts skip categories and tags | The terms step |
+| `get_current_user_id()`, `is_user_logged_in()`, `current_user_can()` | `wp-api/interim/users.php` | Nobody is logged in: ID 0, every capability check says no | The logins step |
+| `WP_Post_Type::remove_rewrite_rules()` guards | `wp-api/classes/WP_Post_Type.php` | Skips removing query vars and rewrite rules when `$wp` / `$wp_rewrite` don't exist; nothing was added to them | The rewrite step |
 | `sanitize_option()` | `wp-api/interim/sanitize-option.php` | Runs only the `sanitize_option_{$option}` filter; none of WordPress's rules for its own options (`admin_email`, `siteurl`, `posts_per_page`, …), and no settings errors | The formatting step |
 | The Requests library (`WpOrg\Requests\…`) | `conformance/bootstrap.php` (checker only) | WordPress's own copy, autoloaded from the fetched sources, because some tests build its objects | The HTTP step |
 | A WordPress install's options | `conformance/bootstrap.php` (checker only) | Seven of the options `populate_options()` writes (`siteurl`, `home`, `blogname`, `blogdescription`, `admin_email`, `timezone_string`, `wp_attachment_pages_enabled`), with WordPress's test-install values | The install step |

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Core\Database\QueryCounter;
+use App\Core\Database\WordPressTables;
 use App\Core\Hooks\HookBus;
 use App\Core\Hooks\WordPressErrors;
 use App\Core\Options\Events\OptionAdded;
@@ -58,6 +59,15 @@ final class CoreServiceProvider extends ServiceProvider
         $this->bootDatabase();
 
         QueryCounter::register($this->app['events']);
+
+        // Once Laravel has started: WordPress's default post types and statuses,
+        // as wp-settings.php registers them. Skipped before the tables exist
+        // (a fresh install, `migrate`) or when the database is down, since they read an option.
+        $this->app->booted(static function (): void {
+            if (WordPressTables::ready()) {
+                create_initial_post_types();
+            }
+        });
     }
 
     /**

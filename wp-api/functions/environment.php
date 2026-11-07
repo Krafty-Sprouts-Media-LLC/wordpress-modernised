@@ -76,3 +76,31 @@ function wp_installing($is_installing = null)
 
     return (bool) $installing;
 }
+
+/**
+ * Determines whether the current request is for an administrative interface page.
+ *
+ * Does not check if the user is an administrator; use current_user_can()
+ * for checking roles and capabilities.
+ *
+ * For more information on this and similar theme functions, check out
+ * the {@link https://developer.wordpress.org/themes/basics/conditional-tags/
+ * Conditional Tags} article in the Theme Developer Handbook.
+ *
+ * @since WM-0.5.0
+ * @since WP-1.5.1
+ *
+ * @global WP_Screen $current_screen WordPress current screen object.
+ *
+ * @return bool True if inside WordPress administration interface, false otherwise.
+ */
+function is_admin()
+{
+    if (isset($GLOBALS['current_screen'])) {
+        return $GLOBALS['current_screen']->in_admin();
+    } elseif (defined('WP_ADMIN')) {
+        return WP_ADMIN;
+    }
+
+    return false;
+}

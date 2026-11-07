@@ -55,14 +55,39 @@ abstract class WP_UnitTestCase extends TestCase
 
         $this->clean_up_global_scope();
 
-        // WordPress's set_up() registers the default post types here, which reads
-        // an option and so loads every autoloaded one. Until the posts step, load
-        // them directly, so tests counting queries start from the same place.
-        wp_load_alloptions();
+        // As WordPress's set_up() does (WP_RUN_CORE_TESTS): register the default
+        // post types again (which also loads the autoloaded options) and drop
+        // statuses a test registered.
+        $this->reset_post_types();
+        $this->reset_post_statuses();
 
         $this->start_transaction();
         $this->expectDeprecated();
         add_filter('wp_die_handler', [$this, 'get_wp_die_handler']);
+    }
+
+    /**
+     * Unregisters all post types and registers the default ones again.
+     */
+    protected function reset_post_types()
+    {
+        foreach (get_post_types([], 'objects') as $pt) {
+            if (empty($pt->tests_no_auto_unregister)) {
+                _unregister_post_type($pt->name);
+            }
+        }
+
+        create_initial_post_types();
+    }
+
+    /**
+     * Unregisters the post statuses a test registered.
+     */
+    protected function reset_post_statuses()
+    {
+        foreach (get_post_stati(['_builtin' => false]) as $post_status) {
+            _unregister_post_status($post_status);
+        }
     }
 
     /**
@@ -416,6 +441,20 @@ abstract class WP_UnitTestCase extends TestCase
     /**
      * Asserts two arrays hold equal values (loose comparison), in any order.
      */
+    public function assertWPError($actual, $message = '')
+    {
+        $this->assertInstanceOf('WP_Error', $actual, $message);
+    }
+
+    public function assertNotWPError($actual, $message = '')
+    {
+        if (is_wp_error($actual)) {
+            $message .= ' '.$actual->get_error_message();
+        }
+
+        $this->assertNotInstanceOf('WP_Error', $actual, $message);
+    }
+
     public function assertEqualSets($expected, $actual, $message = '')
     {
         $this->assertIsArray($expected, $message.' Expected value must be an array.');
