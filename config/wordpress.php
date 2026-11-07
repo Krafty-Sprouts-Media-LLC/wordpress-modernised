@@ -33,4 +33,14 @@ return [
 
     'object_cache' => env('WP_OBJECT_CACHE_STORE'),
 
+    /*
+    | Classes the object cache may rebuild from that store, besides plain
+    | objects, WordPress's own value classes and Laravel's
+    | cache.serializable_classes. A cached value holding any other class stays
+    | in memory for the request, so a store someone else can write to can't be
+    | used to plant objects that run code when read.
+    */
+
+    'object_cache_classes' => [],
+
 ];

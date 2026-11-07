@@ -17,8 +17,9 @@ use Throwable;
  * code shares the same store. Groups marked non-persistent stay in memory.
  *
  * Values are serialized into the store by this class, so every store keeps a
- * copy rather than a shared object, and a value PHP can't serialize (such as
- * a closure) simply stays in memory. Flushing moves a version number instead
+ * copy rather than a shared object. A value PHP can't serialize (such as a
+ * closure), or one holding a class the store may not rebuild, simply stays
+ * in memory. Flushing moves a version number instead
  * of emptying the store, so Laravel's own entries survive.
  */
 final class ObjectCache
@@ -26,6 +27,22 @@ final class ObjectCache
     private const VERSION_KEY = 'wm:object-cache:version';
 
     private const GROUP_VERSION_KEY = 'wm:object-cache:group:';
+
+    /** WordPress's value classes, which its own code caches. */
+    private const WORDPRESS_CLASSES = [
+        'stdClass',
+        'WP_Error',
+        'WP_Post',
+        'WP_Term',
+        'WP_User',
+        'WP_Comment',
+        'WP_Site',
+        'WP_Network',
+        'WP_Theme',
+    ];
+
+    /** @var list<string>|null */
+    private ?array $allowedClasses = null;
 
     /** @var array<string, array<int|string, mixed>> */
     private array $runtime = [];
@@ -255,13 +272,67 @@ final class ObjectCache
     {
         $raw = $this->store->get($this->storeKey($key, $group));
 
-        if (! is_string($raw)) {
+        if (! is_string($raw) || ! $this->onlyAllowedClasses($raw)) {
             return null;
         }
 
-        $value = @unserialize($raw);
+        // Malformed data is a miss, not an error. The allow-list is checked
+        // twice on purpose: above, and by unserialize() itself.
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            $value = unserialize($raw, ['allowed_classes' => $this->allowedClasses()]);
+        } finally {
+            restore_error_handler();
+        }
 
         return is_array($value) && array_key_exists(0, $value) ? $value : null;
+    }
+
+    /**
+     * Whether every class named in serialized data is allowed. Real class
+     * names always follow a delimiter (start, ';', '{' or '}'); text that only
+     * looks like one can make this say no, which only means "not stored".
+     */
+    private function onlyAllowedClasses(string $raw): bool
+    {
+        if (! preg_match_all('/(?:^|[;{}])[OCE]:\d+:"([^"]+)"/', $raw, $matches)) {
+            return true;
+        }
+
+        $allowed = array_change_key_case(array_flip($this->allowedClasses()));
+
+        foreach ($matches[1] as $name) {
+            if (! isset($allowed[strtolower(strtok($name, ':'))])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The classes the store may rebuild: plain objects and WordPress's own
+     * value classes, the classes Laravel's cache allows
+     * (cache.serializable_classes), and any a site adds for its plugins
+     * (wordpress.object_cache_classes). Anything else could be a "gadget"
+     * planted by someone who can write to the store.
+     *
+     * @return list<string>
+     */
+    private function allowedClasses(): array
+    {
+        if ($this->allowedClasses !== null) {
+            return $this->allowedClasses;
+        }
+
+        $laravel = config('cache.serializable_classes');
+
+        return $this->allowedClasses = array_values(array_unique(array_merge(
+            self::WORDPRESS_CLASSES,
+            is_array($laravel) ? $laravel : [],
+            (array) config('wordpress.object_cache_classes', []),
+        )));
     }
 
     private function toStore(int|string $key, string $group, mixed $data, int $expire): void
@@ -271,8 +342,13 @@ final class ObjectCache
         try {
             $raw = serialize([$data]);
         } catch (Throwable) {
-            // Can't be stored (a closure, say): it stays in memory for this
-            // request, and no older copy may be left behind in the store.
+            $raw = null;
+        }
+
+        if ($raw === null || ! $this->onlyAllowedClasses($raw)) {
+            // Can't be stored (a closure, or a class the store may not
+            // rebuild): it stays in memory for this request, and no older
+            // copy may be left behind in the store.
             $this->store->forget($storeKey);
 
             return;

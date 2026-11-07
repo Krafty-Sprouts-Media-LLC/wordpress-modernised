@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Core\Cache;
 
+use App\Core\Cache\ObjectCache;
 use Illuminate\Support\Facades\Cache;
+use ReflectionMethod;
 use Tests\TestCase;
 use WP_Object_Cache;
 
@@ -113,6 +115,41 @@ final class ObjectCacheTest extends TestCase
         $this->assertSame('third', (new WP_Object_Cache)->get('k', 'g'));
     }
 
+    public function test_values_with_unlisted_classes_stay_in_memory(): void
+    {
+        $this->usePersistentStore();
+        $cache = new WP_Object_Cache;
+
+        $this->assertTrue($cache->set('k', ['x' => new ObjectCacheTestValue], 'g'));
+        $this->assertInstanceOf(ObjectCacheTestValue::class, $cache->get('k', 'g')['x']);
+        $this->assertFalse((new WP_Object_Cache)->get('k', 'g'));
+    }
+
+    public function test_listed_classes_and_plain_objects_are_stored(): void
+    {
+        $this->usePersistentStore();
+        config(['wordpress.object_cache_classes' => [ObjectCacheTestValue::class]]);
+
+        (new WP_Object_Cache)->set('k', ['a' => new ObjectCacheTestValue, 'b' => (object) ['id' => 1]], 'g');
+        $value = (new WP_Object_Cache)->get('k', 'g');
+
+        $this->assertInstanceOf(ObjectCacheTestValue::class, $value['a']);
+        $this->assertSame(1, $value['b']->id);
+    }
+
+    public function test_a_tampered_store_cannot_build_unlisted_objects(): void
+    {
+        $this->usePersistentStore();
+        $cache = new ObjectCache(Cache::store('array'));
+        $storeKey = (new ReflectionMethod($cache, 'storeKey'))->invoke($cache, 'k', 'g');
+        Cache::store('array')->forever($storeKey, serialize([new ObjectCacheTestValue]));
+
+        $value = (new WP_Object_Cache)->get('k', 'g');
+
+        $this->assertNotInstanceOf(ObjectCacheTestValue::class, $value);
+        $this->assertFalse($value);
+    }
+
     public function test_a_persistent_store_is_reported_to_wordpress(): void
     {
         $this->usePersistentStore();
@@ -120,4 +157,10 @@ final class ObjectCacheTest extends TestCase
 
         $this->assertTrue(wp_using_ext_object_cache());
     }
+}
+
+/** A class no allow-list names unless a test adds it. */
+final class ObjectCacheTestValue
+{
+    public string $name = 'value';
 }
