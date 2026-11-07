@@ -33,6 +33,25 @@
             <file>wordpress-develop/tests/phpunit/tests/formatting/wpSlash.php</file>
             <file>wordpress-develop/tests/phpunit/tests/formatting/stripslashesDeep.php</file>
             <file>wordpress-develop/tests/phpunit/tests/formatting/mapDeep.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/option.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/getOptions.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/updateOption.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/slashes.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/siteOption.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/networkOption.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpAutoloadValuesToAutoload.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpDetermineOptionAutoloadValue.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpLoadAlloptions.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpPrimeOptionCaches.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpPrimeOptionCachesByGroup.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpPrimeNetworkOptionCaches.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpSetOptionAutoload.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpSetOptionAutoloadValues.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpSetOptionsAutoload.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/registration.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/sanitizeOption.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/userSettings.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpUserSettings.php</file>
         </testsuite>
         <testsuite name="adapted">
             <!-- WordPress tests adapted after a recorded divergence (docs/divergences.md). -->

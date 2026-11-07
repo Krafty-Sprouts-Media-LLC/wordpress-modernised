@@ -37,6 +37,7 @@ require __DIR__.'/functions/environment.php';
 require __DIR__.'/functions/values.php';
 require __DIR__.'/functions/cache.php';
 require __DIR__.'/functions/database.php';
+require __DIR__.'/functions/option.php';
 require __DIR__.'/functions/db-delta.php';
 require __DIR__.'/functions/schema.php';
 require __DIR__.'/functions/deprecated.php';

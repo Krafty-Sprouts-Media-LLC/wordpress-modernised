@@ -17,6 +17,9 @@ return [
     'Tests_Functions_WpTriggerError::test_should_trigger_notice' => $notices,
     'Tests_Functions_WpTriggerError::test_should_trigger_deprecation' => $notices,
 
+    // The core's own queries run through Laravel's query builder (docs/divergences.md, "The `query` filter sees plugins' queries, not the core's").
+    'Tests_Option_WpSetOptionAutoloadValues::test_wp_set_option_autoload_values_with_sql_query_failure' => "Forces the core's UPDATE to fail through the `query` filter, which only sees plugins' \$wpdb queries (OptionsTest::test_the_query_filter_sees_plugin_queries_not_core_option_queries).",
+
     // PostgreSQL: MySQL's own features, and MySQL's exact SQL text (docs/divergences.md, "$wpdb on PostgreSQL").
     'pgsql' => [
         'Tests_DB_dbDelta::*' => 'dbDelta() reads MySQL table definitions; not supported on PostgreSQL (owner decision D).',

@@ -55,6 +55,11 @@ abstract class WP_UnitTestCase extends TestCase
 
         $this->clean_up_global_scope();
 
+        // WordPress's set_up() registers the default post types here, which reads
+        // an option and so loads every autoloaded one. Until the posts step, load
+        // them directly, so tests counting queries start from the same place.
+        wp_load_alloptions();
+
         $this->start_transaction();
         $this->expectDeprecated();
         add_filter('wp_die_handler', [$this, 'get_wp_die_handler']);

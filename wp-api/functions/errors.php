@@ -422,3 +422,90 @@ function is_wp_error($thing)
 
     return $is_wp_error;
 }
+
+/**
+ * Marks a function argument as deprecated and inform when it has been used.
+ *
+ * This function is to be used whenever a deprecated function argument is used.
+ * Before this function is called, the argument must be checked for whether it was
+ * used by comparing it to its default value or evaluating whether it is empty.
+ *
+ * For example:
+ *
+ *     if ( ! empty( $deprecated ) ) {
+ *         _deprecated_argument( __FUNCTION__, '3.0.0' );
+ *     }
+ *
+ * There is a {@see 'deprecated_argument_run'} hook that will be called that can be used
+ * to get the backtrace up to what file and function used the deprecated argument.
+ *
+ * The current behavior is to trigger a user error if WP_DEBUG is true.
+ *
+ * @since WM-0.4.0
+ * @since WP-3.0.0
+ * @since WP-5.4.0 This function is no longer marked as "private".
+ * @since WP-5.4.0 The error type is now classified as E_USER_DEPRECATED (used to default to E_USER_NOTICE).
+ *
+ * @param  string  $function_name  The function that was called.
+ * @param  string  $version  The version of WordPress that deprecated the argument used.
+ * @param  string  $message  Optional. A message regarding the change. Default empty string.
+ */
+function _deprecated_argument($function_name, $version, $message = '')
+{
+
+    /**
+     * Fires when a deprecated argument is called.
+     *
+     * @since WP-3.0.0
+     *
+     * @param  string  $function_name  The function that was called.
+     * @param  string  $message  A message regarding the change.
+     * @param  string  $version  The version of WordPress that deprecated the argument used.
+     */
+    do_action('deprecated_argument_run', $function_name, $message, $version);
+
+    /**
+     * Filters whether to trigger an error for deprecated arguments.
+     *
+     * @since WP-3.0.0
+     *
+     * @param  bool  $trigger  Whether to trigger the error for deprecated arguments. Default true.
+     */
+    if (WP_DEBUG && apply_filters('deprecated_argument_trigger_error', true)) {
+        if (function_exists('__')) {
+            if ($message) {
+                $message = sprintf(
+                    /* translators: 1: PHP function name, 2: Version number, 3: Optional message regarding the change. */
+                    __('Function %1$s was called with an argument that is <strong>deprecated</strong> since version %2$s! %3$s'),
+                    $function_name,
+                    $version,
+                    $message
+                );
+            } else {
+                $message = sprintf(
+                    /* translators: 1: PHP function name, 2: Version number. */
+                    __('Function %1$s was called with an argument that is <strong>deprecated</strong> since version %2$s with no alternative available.'),
+                    $function_name,
+                    $version
+                );
+            }
+        } else {
+            if ($message) {
+                $message = sprintf(
+                    'Function %1$s was called with an argument that is <strong>deprecated</strong> since version %2$s! %3$s',
+                    $function_name,
+                    $version,
+                    $message
+                );
+            } else {
+                $message = sprintf(
+                    'Function %1$s was called with an argument that is <strong>deprecated</strong> since version %2$s with no alternative available.',
+                    $function_name,
+                    $version
+                );
+            }
+        }
+
+        wp_trigger_error('', $message, E_USER_DEPRECATED);
+    }
+}

@@ -81,6 +81,19 @@
 | **Plugins it breaks** | Object-cache drop-ins (`object-cache.php`, such as Redis Object Cache): not loaded; set `WP_OBJECT_CACHE_STORE` instead. Plugins that write to `$wp_object_cache->cache` directly. With a persistent store, plugins caching their own classes get them from memory only, so each request rebuilds them. |
 | **How they are fixed** | Use a Laravel cache store. Use the `wp_cache_*()` functions instead of the cache's internals. List a plugin's own cached classes in `wordpress.object_cache_classes`. |
 
+## Options are stored through Laravel's query builder
+
+**Since:** WM-0.4.0
+
+| | |
+|---|---|
+| **What WordPress does** | `get_option()`, `add_option()`, `update_option()`, `delete_option()` and the autoload functions build MySQL SQL and run it through `$wpdb`. `add_option()` uses MySQL's `INSERT … ON DUPLICATE KEY UPDATE`. A database error is printed (unless suppressed) and the function carries on as if the option were missing. |
+| **What we do instead** | The same flow (filters, actions, the `alloptions` and `notoptions` cache entries, the same number of queries), with rows read and written by `App\Core\Options\OptionRepository` through Laravel's query builder (owner's decision C, 2026-11-07); `add_option()`'s insert-or-update is Laravel's portable `upsert()`. Values stay PHP-serialized (decision B). `added_option`, `updated_option` and `deleted_option` are dispatched as Laravel events (`OptionAdded`, `OptionUpdated`, `OptionDeleted`) and bridged to the actions. A database error is a Laravel exception, except where WordPress suppresses errors (loading autoloaded options, and `get_option()` while installing). Laravel code reads options through `App\Core\Options\Options`, over the same doors. `form_option()` comes with the formatting step (it needs `esc_attr()`). Multisite branches are left out. |
+| **Why** | Portable SQL on MySQL, MariaDB and PostgreSQL; one cache and one set of hooks for Laravel code and plugins (AGENTS.md rule 2). |
+| **Plugins it breaks** | Plugins that rewrite option queries through the `query` filter (see the next entry). Code that relied on a broken options table being silently ignored. |
+| **How they are fixed** | Use the option filters (`pre_option_{$option}`, `pre_update_option`, …). Fix the database. |
+| **WordPress tests** | All of WordPress's option tests for the areas built pass on all three databases, except one that forces a failure through the `query` filter (`conformance/diverged.php`). Settings registration, `sanitize_option()`'s rules and user settings wait for their steps (`conformance/waiting.php`); the theme-mods tests join the checker with themes. |
+
 ## The `query` filter sees plugins' queries, not the core's
 
 **Since:** WM-0.4.0
