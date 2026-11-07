@@ -15,7 +15,7 @@ const REPOSITORY = 'https://github.com/WordPress/wordpress-develop.git';
  * Folders of the checkout we use: WordPress's tests, the test data the areas
  * we've rebuilt read, and its source for reference.
  */
-const PATHS = ['tests/phpunit/includes', 'tests/phpunit/tests', 'tests/phpunit/data/formatting', 'tests/phpunit/data/themedir1/block-theme','src/wp-includes', 'src/wp-admin/includes'];
+const PATHS = ['tests/phpunit/includes', 'tests/phpunit/tests', 'tests/phpunit/data/formatting', 'tests/phpunit/data/themedir1/block-theme', 'src/wp-includes', 'src/wp-admin/includes'];
 
 $target = __DIR__.'/wordpress-develop';
 

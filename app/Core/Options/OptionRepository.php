@@ -128,6 +128,57 @@ final class OptionRepository
         return $this->table()->whereIn('option_name', $names)->update(['autoload' => $autoload]);
     }
 
+    /**
+     * Deletes every expired transient: its value row and its timeout row,
+     * for transients ('_transient_') and site transients ('_site_transient_').
+     * As in WordPress, a pair is deleted only when both rows exist and the
+     * timeout, read as a number, is before $now. Returns the rows deleted.
+     *
+     * WordPress does this with a MySQL-only multi-table DELETE; here the
+     * timeouts are compared in PHP, which reads a number the way MySQL does
+     * ('123abc' is 123, text is 0), so it works on every database.
+     */
+    public function deleteExpiredTransients(int $now): int
+    {
+        $deleted = 0;
+
+        foreach (['_transient_', '_site_transient_'] as $prefix) {
+            $timeoutPrefix = $prefix.'timeout_';
+            $expired = [];
+
+            foreach ($this->table()->where('option_name', 'like', $this->startsWith($timeoutPrefix))->get(['option_name', 'option_value']) as $row) {
+                if ((int) $row->option_value < $now) {
+                    $expired[] = substr((string) $row->option_name, strlen($timeoutPrefix));
+                }
+            }
+
+            foreach (array_chunk($expired, 500) as $names) {
+                $withValues = $this->table()
+                    ->whereIn('option_name', array_map(fn (string $name) => $prefix.$name, $names))
+                    ->pluck('option_name')
+                    ->map(fn ($name) => substr((string) $name, strlen($prefix)))
+                    ->all();
+
+                if ($withValues === []) {
+                    continue;
+                }
+
+                $deleted += $this->table()->whereIn('option_name', [
+                    ...array_map(fn (string $name) => $prefix.$name, $withValues),
+                    ...array_map(fn (string $name) => $timeoutPrefix.$name, $withValues),
+                ])->delete();
+            }
+        }
+
+        return $deleted;
+    }
+
+    /** A LIKE pattern for names starting with $prefix, with LIKE's wildcards escaped. */
+    private function startsWith(string $prefix): string
+    {
+        return addcslashes($prefix, '\\%_').'%';
+    }
+
     private function table(): Builder
     {
         return DB::table(config('wordpress.table_prefix').'options');

@@ -26,7 +26,7 @@
 | **Why** | PostgreSQL support with API-level compatibility (owner's decisions, 2026-11-05). |
 | **Plugins it breaks** | On PostgreSQL only: plugins that write MySQL-only SQL themselves, store NUL bytes in text, switch databases with `$wpdb->select()`, or create tables with `dbDelta()`. MySQL and MariaDB are unchanged (pinned by `WpdbMySqlDialectTest`). |
 | **How they are fixed** | Use `$wpdb`'s methods and portable SQL; native plugins create tables with Laravel migrations. |
-| **WordPress tests** | On PostgreSQL the checker runs all 994 tests: 683 pass, and the rest are listed in `conformance/diverged.php` (`'pgsql'`) or `waiting.php` with reasons. Diverged on PostgreSQL: all of `Tests_DB_dbDelta` (decision D) and `Tests_DB_Charset` (MySQL's character sets); `Tests_DB`'s three SQL-mode tests; three `prepare()` tests and one update test that check for MySQL's escaping or backticks in the SQL text. MySQL and MariaDB: unchanged (994 tests, 30 listed). |
+| **WordPress tests** | The checker runs the same 1,568 tests on every database (as of WM-0.4.0): 1,453 pass on MySQL and MariaDB and 1,172 on PostgreSQL; the rest are skipped with reasons. The PostgreSQL-only skips are listed in `conformance/diverged.php` (`'pgsql'`) or `waiting.php` with reasons. Diverged on PostgreSQL: all of `Tests_DB_dbDelta` (decision D) and `Tests_DB_Charset` (MySQL's character sets); `Tests_DB`'s three SQL-mode tests; three `prepare()` tests and one update test that check for MySQL's escaping or backticks in the SQL text. MySQL and MariaDB: unchanged (994 tests, 30 listed). |
 
 ## `$wpdb->dbh` is a PDO connection, not mysqli
 
@@ -93,6 +93,18 @@
 | **Plugins it breaks** | Plugins that rewrite option queries through the `query` filter (see the next entry). Code that relied on a broken options table being silently ignored. |
 | **How they are fixed** | Use the option filters (`pre_option_{$option}`, `pre_update_option`, …). Fix the database. |
 | **WordPress tests** | All of WordPress's option tests for the areas built pass on all three databases, except one that forces a failure through the `query` filter (`conformance/diverged.php`). Settings registration, `sanitize_option()`'s rules and user settings wait for their steps (`conformance/waiting.php`); the theme-mods tests join the checker with themes. |
+
+## Expired transients are cleaned by Laravel's scheduler
+
+**Since:** WM-0.4.0
+
+| | |
+|---|---|
+| **What WordPress does** | WP-Cron fires `delete_expired_transients` daily, and `delete_expired_transients()` removes each expired value row and its timeout row with a MySQL-only multi-table `DELETE`. |
+| **What we do instead** | Laravel's scheduler fires the same action daily (`routes/console.php`; the site's cron runs `php artisan schedule:run`), and the function removes the same rows through Laravel's query builder (`OptionRepository::deleteExpiredTransients()`), comparing timeouts in PHP, which reads numbers as MySQL does. With a persistent object cache, transients live in the cache store and expire there, as in WordPress. |
+| **Why** | Laravel owns scheduled jobs (AGENTS.md rule 2); portable SQL on every database. WP-Cron comes with a later step. |
+| **Plugins it breaks** | None: the action still fires and can be unhooked. Sites must run Laravel's scheduler, as any Laravel app does. |
+| **How they are fixed** | — |
 
 ## The `query` filter sees plugins' queries, not the core's
 

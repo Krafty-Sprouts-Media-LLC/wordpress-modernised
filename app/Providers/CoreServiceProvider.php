@@ -44,6 +44,7 @@ final class CoreServiceProvider extends ServiceProvider
 
         // From WordPress's default-filters.php: options too large to load on every request aren't autoloaded.
         add_filter('wp_default_autoload_value', 'wp_filter_default_autoload_value_via_option_size', 10, 4);
+        add_action('delete_expired_transients', 'delete_expired_transients');
 
         $this->bridgeOptionEvents();
 

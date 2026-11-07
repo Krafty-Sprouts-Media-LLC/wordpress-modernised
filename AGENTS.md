@@ -17,7 +17,7 @@ This is our own product: WordPress rebuilt on Laravel.
 
 We take things from WordPress only when we choose to: mainly security fixes for code we carried over, and new functions that plugins start relying on. We **write our own version** of what we take; we do not merge WordPress's code in.
 
-**Status:** nothing of the core is built yet. Plans live in `docs/plans/`.
+**Status:** early. Built so far: the hooks, the database layer (MySQL, MariaDB and PostgreSQL), the object cache, options and transients. Plans live in `docs/plans/`.
 
 ## Decisions already made
 

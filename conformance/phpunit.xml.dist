@@ -48,6 +48,8 @@
             <file>wordpress-develop/tests/phpunit/tests/option/wpSetOptionAutoload.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/wpSetOptionAutoloadValues.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/wpSetOptionsAutoload.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/transient.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/siteTransient.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/registration.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/sanitizeOption.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/userSettings.php</file>
