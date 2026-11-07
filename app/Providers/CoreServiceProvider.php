@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Core\Database\QueryCounter;
 use App\Core\Hooks\HookBus;
 use App\Core\Hooks\WordPressErrors;
+use App\Core\Options\Events\OptionAdded;
+use App\Core\Options\Events\OptionDeleted;
+use App\Core\Options\Events\OptionUpdated;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
-use RuntimeException;
 use wpdb;
 
 /**
@@ -39,17 +43,35 @@ final class CoreServiceProvider extends ServiceProvider
         add_filter('wp_trigger_error_trigger_error', [WordPressErrors::class, 'shouldTrigger'], 10, 4);
         add_action('wp_trigger_error_always_run', [WordPressErrors::class, 'log'], 10, 3);
 
+        // From WordPress's default-filters.php: options too large to load on every request aren't autoloaded.
+        add_filter('wp_default_autoload_value', 'wp_filter_default_autoload_value_via_option_size', 10, 4);
+        add_action('delete_expired_transients', 'delete_expired_transients');
+
+        $this->bridgeOptionEvents();
+
+        // WordPress's object cache before the database, as wp-settings.php does.
+        wp_start_object_cache();
+
+        // A queue worker boots once and runs many jobs: each starts with a fresh
+        // memory, as each WordPress request does, so no job sees another's options.
+        $this->app['events']->listen(JobProcessing::class, static fn () => wp_cache_flush_runtime());
+
         $this->bootDatabase();
+
+        QueryCounter::register($this->app['events']);
     }
 
     /**
-     * Whether this PHP version can use PostgreSQL safely. Before 8.4, PDO's own
-     * SQL scanner reads \' inside a string as an escaped quote, so a value ending
-     * in a backslash followed by one containing ? or :name is silently corrupted.
+     * Announces option changes once: the doors dispatch Laravel events, and
+     * these bridges fire WordPress's actions with the same arguments.
      */
-    public static function supportsPostgres(int $phpVersionId): bool
+    private function bridgeOptionEvents(): void
     {
-        return $phpVersionId >= 80400;
+        $hooks = $this->app->make(HookBus::class);
+
+        $hooks->bridge(OptionAdded::class, 'added_option', fn (OptionAdded $event) => [$event->option, $event->value]);
+        $hooks->bridge(OptionUpdated::class, 'updated_option', fn (OptionUpdated $event) => [$event->option, $event->oldValue, $event->value]);
+        $hooks->bridge(OptionDeleted::class, 'deleted_option', fn (OptionDeleted $event) => [$event->option]);
     }
 
     /**
@@ -64,10 +86,6 @@ final class CoreServiceProvider extends ServiceProvider
 
         if (! in_array($config['driver'] ?? null, ['mysql', 'mariadb', 'pgsql'], true)) {
             return;
-        }
-
-        if ($config['driver'] === 'pgsql' && ! self::supportsPostgres(PHP_VERSION_ID)) {
-            throw new RuntimeException('PostgreSQL needs PHP 8.4 or newer: PHP 8.3 can silently corrupt some queries (docs/divergences.md).');
         }
 
         foreach ([

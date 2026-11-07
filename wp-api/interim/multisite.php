@@ -41,3 +41,38 @@ if (! function_exists('is_main_network')) {
         return true;
     }
 }
+
+if (! function_exists('get_current_blog_id')) {
+    /**
+     * Retrieves the current site ID.
+     *
+     * Stand-in: single site only, so always 1.
+     *
+     * @since WM-0.4.0
+     * @since WP-3.1.0
+     *
+     * @return int Site ID.
+     */
+    function get_current_blog_id()
+    {
+        return 1;
+    }
+}
+
+if (! function_exists('get_current_network_id')) {
+    /**
+     * Retrieves the current network ID.
+     *
+     * Stand-in: single site only, so always 1, as WordPress answers on a
+     * single site.
+     *
+     * @since WM-0.4.0
+     * @since WP-4.6.0
+     *
+     * @return int The ID of the current network.
+     */
+    function get_current_network_id()
+    {
+        return 1;
+    }
+}

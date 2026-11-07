@@ -26,10 +26,47 @@
             <file>wordpress-develop/tests/phpunit/tests/db/realEscape.php</file>
             <file>wordpress-develop/tests/phpunit/tests/db/charset.php</file>
             <file>wordpress-develop/tests/phpunit/tests/db/dbDelta.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/cache.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/isSerialized.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/isSerializedString.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/maybeSerialize.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/wpSlash.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/stripslashesDeep.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/mapDeep.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/option.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/getOptions.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/updateOption.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/slashes.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/siteOption.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/networkOption.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpAutoloadValuesToAutoload.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpDetermineOptionAutoloadValue.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpLoadAlloptions.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpPrimeOptionCaches.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpPrimeOptionCachesByGroup.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpPrimeNetworkOptionCaches.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpSetOptionAutoload.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpSetOptionAutoloadValues.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpSetOptionsAutoload.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/transient.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/siteTransient.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/registration.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/sanitizeOption.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/userSettings.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/option/wpUserSettings.php</file>
         </testsuite>
         <testsuite name="adapted">
             <!-- WordPress tests adapted after a recorded divergence (docs/divergences.md). -->
             <directory suffix=".php">adapted</directory>
         </testsuite>
     </testsuites>
+    <groups>
+        <!-- As WordPress's own phpunit.xml.dist does for a single site. -->
+        <exclude>
+            <group>ajax</group>
+            <group>ms-files</group>
+            <group>ms-required</group>
+            <group>external-http</group>
+        </exclude>
+    </groups>
 </phpunit>

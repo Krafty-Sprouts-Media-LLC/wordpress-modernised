@@ -14,4 +14,8 @@ return [
     'Tests_DB::test_get_col' => 'Needs the default admin user a WordPress install creates. Arrives with the logins step.',
     'Tests_DB::test_db_reconnect' => 'Needs the default admin user a WordPress install creates. Arrives with the logins step.',
     'Tests_DB::test_mysqli_flush_sync' => "Needs WordPress's post factory and wp_delete_post(). Arrives with the posts step.",
+    'Tests_Option_Registration::*' => "Needs the Settings API (register_setting()) and WordPress's rules in sanitize_option(). Arrive with the formatting step.",
+    'Tests_Option_SanitizeOption::*' => "Needs WordPress's rules in sanitize_option() (stand-in runs only its filter). Arrives with the formatting step.",
+    'Tests_Option_UserSettings::*' => 'Needs users and the current user. Arrives with the logins step.',
+    'Tests_Option_wpUserSettings::*' => 'Needs users and the current user. Arrives with the logins step.',
 ];

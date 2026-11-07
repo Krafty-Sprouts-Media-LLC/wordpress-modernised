@@ -1,9 +1,11 @@
 <?php
 
 /**
- * Database setup: wp_set_wpdb_vars() gives $wpdb its table prefix and column formats.
+ * Database setup: wp_set_wpdb_vars() gives $wpdb its table prefix and column
+ * formats; get_num_queries() reports the connection's query count.
  *
- * Contains code from WordPress 7.1.4: src/wp-includes/load.php.
+ * Contains code from WordPress 7.1.4: src/wp-includes/load.php and
+ * src/wp-includes/functions.php.
  */
 
 /**
@@ -106,4 +108,24 @@ function esc_sql($data)
     global $wpdb;
 
     return $wpdb->_escape($data);
+}
+
+/**
+ * Retrieves the number of database queries during the WordPress execution.
+ *
+ * Counts every query on the connection: the ones plugins send through $wpdb,
+ * and the ones the house runs through Laravel (App\Core\Database\QueryCounter).
+ *
+ * @since WM-0.4.0
+ * @since WP-2.0.0
+ *
+ * @global wpdb $wpdb WordPress database abstraction object.
+ *
+ * @return int Number of database queries.
+ */
+function get_num_queries()
+{
+    global $wpdb;
+
+    return $wpdb->num_queries;
 }

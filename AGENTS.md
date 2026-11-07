@@ -17,7 +17,7 @@ This is our own product: WordPress rebuilt on Laravel.
 
 We take things from WordPress only when we choose to: mainly security fixes for code we carried over, and new functions that plugins start relying on. We **write our own version** of what we take; we do not merge WordPress's code in.
 
-**Status:** nothing of the core is built yet. Plans live in `docs/plans/`.
+**Status:** early. Built so far: the hooks, the database layer (MySQL, MariaDB and PostgreSQL), the object cache, options and transients. Plans live in `docs/plans/`.
 
 ## Decisions already made
 
@@ -29,9 +29,9 @@ We take things from WordPress only when we choose to: mainly security fixes for 
 | Database | One database layer on Laravel's connection. **MySQL/MariaDB first** (what plugins expect), **PostgreSQL proven early**. `$wpdb`'s methods work on both; plugins' own MySQL-flavoured SQL is not translated, so those plugins get fixed (rule 3) |
 | Database connection | **One connection, Laravel's.** `$wpdb->dbh` is Laravel's PDO. WordPress's 12 single-site tables are kept as they are; table design changes come later, one at a time. No multisite for now. No Laravel `users` table: `wp_users` is the one user table |
 | SQL modes | **WordPress's relaxed MySQL modes for the whole connection** (Laravel's code included), until WordPress's `0000-00-00` empty dates are replaced; then strict mode returns |
-| Defaults | `WP_DEBUG_DISPLAY` **off** by default (WordPress: on); minimum PHP **8.3** (WordPress: 7.4). Both recorded in `docs/divergences.md` |
+| Defaults | `WP_DEBUG_DISPLAY` **off** by default (WordPress: on); minimum PHP **8.4** (WordPress: 7.4). Both recorded in `docs/divergences.md` |
 | WordPress baseline | **WordPress 7.1.4** (tag `7.1.4` of `wordpress-develop`). Its PHPUnit suite is the checker |
-| PHP | **8.3 or newer** (Laravel 13's minimum); **8.4 or newer with PostgreSQL** (PHP 8.3's PDO can corrupt some PostgreSQL queries) |
+| PHP | **8.4 or newer**: Laravel 13's Symfony 8 components need 8.4.1, and PHP 8.3's PDO can corrupt some PostgreSQL queries (owner's decision E, 2026-11-07) |
 | Framework | Laravel 13. App tests on PHPUnit 12; WordPress's tests on PHPUnit 9.6 in `conformance/` (they need it) |
 | Code style | **Laravel's style everywhere**, enforced by Pint. See `docs/coding-standards.md` |
 | Versions | Our own semver, starting at 0.1.0, tagged `@since WM-x.y.z`. WordPress's history is kept, labelled `@since WP-x.y.z` |

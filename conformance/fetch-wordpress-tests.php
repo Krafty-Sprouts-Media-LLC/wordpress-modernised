@@ -11,8 +11,11 @@ const TAG = '7.1.4';
 const SHA = '0afb74de8c3fe4c1869e44b62b0418d67b11aa4c';
 const REPOSITORY = 'https://github.com/WordPress/wordpress-develop.git';
 
-/** Folders of the checkout we use: WordPress's tests, and its source for reference. */
-const PATHS = ['tests/phpunit/includes', 'tests/phpunit/tests', 'src/wp-includes', 'src/wp-admin/includes'];
+/**
+ * Folders of the checkout we use: WordPress's tests, the test data the areas
+ * we've rebuilt read, and its source for reference.
+ */
+const PATHS = ['tests/phpunit/includes', 'tests/phpunit/tests', 'tests/phpunit/data/formatting', 'tests/phpunit/data/themedir1/block-theme', 'src/wp-includes', 'src/wp-admin/includes'];
 
 $target = __DIR__.'/wordpress-develop';
 

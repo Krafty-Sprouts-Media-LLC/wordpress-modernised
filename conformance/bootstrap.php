@@ -2,6 +2,7 @@
 
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Bootstrap for the checker: boots the real Laravel app, then loads
@@ -12,6 +13,7 @@ define('WP_DEBUG', true);
 // WordPress's test configuration shows errors (its default); the app defaults this to off (docs/divergences.md).
 define('WP_DEBUG_DISPLAY', true);
 define('WP_TESTS_CHECKOUT', __DIR__.'/wordpress-develop');
+define('DIR_TESTDATA', WP_TESTS_CHECKOUT.'/tests/phpunit/data');
 // WordPress's install folder, as code loading wp-admin/includes/upgrade.php expects (stand-in: docs/stand-ins.md).
 define('ABSPATH', __DIR__.'/abspath/');
 
@@ -69,6 +71,33 @@ if (Artisan::call('migrate:fresh', ['--force' => true]) !== 0) {
     fwrite(STDERR, Artisan::output());
     exit(1);
 }
+
+// Stand-in until the install step: a few of the options WordPress's installer
+// (populate_options()) writes, with the values WordPress's test install uses,
+// so the options table isn't empty as no real site's is (docs/stand-ins.md).
+foreach ([
+    'siteurl' => 'http://example.org',
+    'home' => 'http://example.org',
+    'blogname' => 'Test Blog',
+    'blogdescription' => '',
+    'admin_email' => 'admin@example.org',
+    'timezone_string' => '',
+    'wp_attachment_pages_enabled' => '0',
+] as $name => $value) {
+    DB::table(config('wordpress.table_prefix').'options')->insert(['option_name' => $name, 'option_value' => $value, 'autoload' => 'on']);
+}
+
+// Stand-in until the HTTP step: WordPress's own copy of the Requests library,
+// which some tests build objects from (docs/stand-ins.md).
+spl_autoload_register(static function (string $class): void {
+    if (str_starts_with($class, 'WpOrg\\Requests\\')) {
+        $file = WP_TESTS_CHECKOUT.'/src/wp-includes/Requests/src/'.str_replace('\\', '/', substr($class, 15)).'.php';
+
+        if (is_file($file)) {
+            require $file;
+        }
+    }
+});
 
 // Stand-ins first: WordPress's utils.php declares a class that extends wpdb.
 require __DIR__.'/includes/stand-ins.php';

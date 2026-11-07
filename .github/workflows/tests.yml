@@ -22,7 +22,7 @@ jobs:
           - { image: 'mariadb:12.3', connection: mariadb, port: 3306, health: 'healthcheck.sh --connect --innodb_initialized' }
           - { image: 'postgres:18', connection: pgsql, port: 5432, health: 'pg_isready -U wordpress -d wordpress' }
         include:
-          - php: '8.3'
+          - php: '8.4'
             db: { image: 'mysql:9.7', connection: mysql, port: 3306, health: 'mysqladmin ping -h 127.0.0.1 -uroot -proot' }
 
     services:

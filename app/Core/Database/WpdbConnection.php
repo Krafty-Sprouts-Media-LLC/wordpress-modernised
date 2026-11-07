@@ -45,10 +45,22 @@ final class WpdbConnection
     /** @var array<string, Dialect> */
     private array $dialects = [];
 
+    /** Whether a wpdb query is being announced to Laravel's listeners right now. */
+    private static bool $loggingOwnQuery = false;
+
     /**
      * @param  Connection|null  $own  A connection of its own; null means Laravel's default connection, looked up on every use.
      */
     private function __construct(private readonly ?Connection $own) {}
+
+    /**
+     * Whether the query Laravel is announcing came from wpdb, which counts its
+     * own queries (QueryCounter skips those).
+     */
+    public static function isLoggingOwnQuery(): bool
+    {
+        return self::$loggingOwnQuery;
+    }
 
     /**
      * The connection for these credentials: Laravel's default connection when
@@ -249,7 +261,14 @@ final class WpdbConnection
         }
 
         // Visible to DB::listen(), the query log and debugging tools, like Laravel's own queries.
-        $this->connection()->logQuery($sql, [], round((microtime(true) - $started) * 1000, 2));
+        // Marked so QueryCounter doesn't count it a second time: wpdb counts its own queries.
+        self::$loggingOwnQuery = true;
+
+        try {
+            $this->connection()->logQuery($sql, [], round((microtime(true) - $started) * 1000, 2));
+        } finally {
+            self::$loggingOwnQuery = false;
+        }
 
         return $result;
     }
