@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Core\Database\QueryCounter;
 use App\Core\Hooks\HookBus;
 use App\Core\Hooks\WordPressErrors;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
-use RuntimeException;
 use wpdb;
 
 /**
@@ -40,16 +40,8 @@ final class CoreServiceProvider extends ServiceProvider
         add_action('wp_trigger_error_always_run', [WordPressErrors::class, 'log'], 10, 3);
 
         $this->bootDatabase();
-    }
 
-    /**
-     * Whether this PHP version can use PostgreSQL safely. Before 8.4, PDO's own
-     * SQL scanner reads \' inside a string as an escaped quote, so a value ending
-     * in a backslash followed by one containing ? or :name is silently corrupted.
-     */
-    public static function supportsPostgres(int $phpVersionId): bool
-    {
-        return $phpVersionId >= 80400;
+        QueryCounter::register($this->app['events']);
     }
 
     /**
@@ -64,10 +56,6 @@ final class CoreServiceProvider extends ServiceProvider
 
         if (! in_array($config['driver'] ?? null, ['mysql', 'mariadb', 'pgsql'], true)) {
             return;
-        }
-
-        if ($config['driver'] === 'pgsql' && ! self::supportsPostgres(PHP_VERSION_ID)) {
-            throw new RuntimeException('PostgreSQL needs PHP 8.4 or newer: PHP 8.3 can silently corrupt some queries (docs/divergences.md).');
         }
 
         foreach ([

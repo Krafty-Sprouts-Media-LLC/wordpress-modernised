@@ -8,7 +8,7 @@ WordPress rebuilt on Laravel, part by part: WordPress's code rewritten as Larave
 
 ## Requirements
 
-- PHP 8.3 or newer
+- PHP 8.4 or newer
 - Composer
 
 ## Getting started

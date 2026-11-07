@@ -22,7 +22,7 @@
 |---|---|
 | **What WordPress does** | `$wpdb` speaks MySQL only. |
 | **What we do instead** | On PostgreSQL, `$wpdb`'s **methods** work: `insert()`, `update()`, `delete()`, `replace()`, `get_var()`, `get_row()`, `get_col()`, `get_results()`, `prepare()`, `esc_sql()`, `insert_id`, `rows_affected`. A small dialect seam (`App\Core\Database\Dialect`) handles the differences:<br>- names are double-quoted and lowercased;<br>- escaping doubles quotes, as PostgreSQL's standard strings expect (backslash is ordinary text);<br>- `REPLACE` keeps MySQL's meaning (delete the clashing row, then insert; 2 rows affected);<br>- the insert ID comes from the table's identity sequence;<br>- in **date columns**, the empty date `0000-00-00 00:00:00` is stored as NULL and read back as `0000-00-00 00:00:00` (other columns keep that text as given);<br>- results from **WordPress's own tables** (`posts`, `users`, `comments`, `links`, matched exactly) get WordPress's column casing (`ID`, `comment_ID`) and empty dates; plugin tables come back as stored;<br>- an insert that gives its own ID sets `insert_id` to it and moves the table's counter past it, as MySQL's AUTO_INCREMENT does (identity and serial columns alike);<br>- `%i` identifiers use double quotes; the old `$wpdb->escape()` / `_weak_escape()` escape the PostgreSQL way (WordPress's `addslashes()` would allow injection there);<br>- WordPress's charset and length checks get MySQL-shaped column details from PostgreSQL's catalog (all text is UTF-8, `utf8mb4`). |
-| **What stays different** | **Plugins' own SQL is passed through as written, never translated** (AGENTS.md rule 3): MySQL-only syntax (backticks, `LIMIT 0, 10`, MySQL functions) fails, with a note saying so. **NUL bytes are removed from text** (PostgreSQL text can't hold them). **Inside a transaction, each `$wpdb` query runs in its own savepoint**, so a failed query fails alone, as in MySQL (PostgreSQL would otherwise abort the whole transaction); this costs two small extra round trips per query inside transactions. `$wpdb->select()` can't switch to another database (PostgreSQL connections can't). `dbDelta()` is not supported (owner's decision D). A plugin's own `START TRANSACTION` / `COMMIT` / `SAVEPOINT` through `$wpdb->query()` run as written. Text columns report MySQL's `longtext`, so WordPress's smaller byte limits for `text`/`tinytext` don't apply. Expressions and aliases (`SELECT post_date_gmt AS d`, `MAX(post_modified)`) don't get the empty-date or casing mapping. **PostgreSQL needs PHP 8.4 or newer**: PHP 8.3's PDO reads `'` inside a string as an escaped quote and can silently corrupt a query; the app refuses to start on PostgreSQL with PHP 8.3. Lost connections are recognised from PostgreSQL's messages, so `$wpdb` reconnects as on MySQL. |
+| **What stays different** | **Plugins' own SQL is passed through as written, never translated** (AGENTS.md rule 3): MySQL-only syntax (backticks, `LIMIT 0, 10`, MySQL functions) fails, with a note saying so. **NUL bytes are removed from text** (PostgreSQL text can't hold them). **Inside a transaction, each `$wpdb` query runs in its own savepoint**, so a failed query fails alone, as in MySQL (PostgreSQL would otherwise abort the whole transaction); this costs two small extra round trips per query inside transactions. `$wpdb->select()` can't switch to another database (PostgreSQL connections can't). `dbDelta()` is not supported (owner's decision D). A plugin's own `START TRANSACTION` / `COMMIT` / `SAVEPOINT` through `$wpdb->query()` run as written. Text columns report MySQL's `longtext`, so WordPress's smaller byte limits for `text`/`tinytext` don't apply. Expressions and aliases (`SELECT post_date_gmt AS d`, `MAX(post_modified)`) don't get the empty-date or casing mapping. **PostgreSQL needs PHP 8.4 or newer**, now the minimum everywhere (see *Minimum PHP is 8.4*). Lost connections are recognised from PostgreSQL's messages, so `$wpdb` reconnects as on MySQL. |
 | **Why** | PostgreSQL support with API-level compatibility (owner's decisions, 2026-11-05). |
 | **Plugins it breaks** | On PostgreSQL only: plugins that write MySQL-only SQL themselves, store NUL bytes in text, switch databases with `$wpdb->select()`, or create tables with `dbDelta()`. MySQL and MariaDB are unchanged (pinned by `WpdbMySqlDialectTest`). |
 | **How they are fixed** | Use `$wpdb`'s methods and portable SQL; native plugins create tables with Laravel migrations. |
@@ -57,17 +57,29 @@
 | **How they are fixed** | `WP_DEBUG_DISPLAY=true` in `.env`. |
 | **WordPress tests** | None diverge: the checker runs with WordPress's test configuration (`WP_DEBUG_DISPLAY` on). |
 
-## Minimum PHP is 8.3
+## Minimum PHP is 8.4
 
-**Since:** WM-0.2.0
+**Since:** WM-0.2.0 (8.3); WM-0.4.0 (8.4)
 
 | | |
 |---|---|
 | **What WordPress does** | `$required_php_version` is `7.4`. |
-| **What we do instead** | `8.3`, Laravel 13's minimum. |
-| **Why** | Laravel owns the runtime (AGENTS.md rule 2). |
-| **Plugins it breaks** | Plugins that only run on PHP older than 8.3. WordPress itself supports 8.3+, so plugins maintained for current WordPress are unaffected. |
-| **How they are fixed** | Update the plugin to PHP 8.3, or use a maintained version. |
+| **What we do instead** | `8.4`. |
+| **Why** | Laravel owns the runtime (AGENTS.md rule 2). Laravel 13 itself allows 8.3, but its current Symfony 8 components need PHP 8.4.1, and PHP 8.3's PDO can silently corrupt some PostgreSQL queries (a value ending in a backslash followed by one containing `?` or `:name`). Owner's decision E, 2026-11-07. |
+| **Plugins it breaks** | Plugins that only run on PHP older than 8.4. WordPress itself supports 8.4, so plugins maintained for current WordPress are unaffected. |
+| **How they are fixed** | Update the plugin to PHP 8.4, or use a maintained version. |
+
+## The `query` filter sees plugins' queries, not the core's
+
+**Since:** WM-0.4.0
+
+| | |
+|---|---|
+| **What WordPress does** | Every query WordPress runs goes through `$wpdb->query()`, so the `query` filter sees (and can rewrite) all of them, core and plugin alike. |
+| **What we do instead** | The house runs its queries through Laravel's query builder (owner's decision C, 2026-11-07). The `query` filter sees the queries plugins send through `$wpdb`; the core's own queries don't pass through it. They are still counted in `get_num_queries()` and, with `SAVEQUERIES` on, logged in `$wpdb->queries` (`App\Core\Database\QueryCounter`). |
+| **Why** | Laravel's query builder writes SQL that works on MySQL, MariaDB and PostgreSQL alike, so the core needs no translator. String-built SQL through `$wpdb` would have to be written three ways. |
+| **Plugins it breaks** | Plugins that rewrite core queries through the `query` filter (rare: query-routing and sharding tools, which replace `$wpdb` in WordPress anyway). Debugging tools that read `$wpdb->queries` or `get_num_queries()` keep working. |
+| **How they are fixed** | Rewrite against the area's own filters (such as `posts_request`), or listen to Laravel's `QueryExecuted` event. |
 
 ## wp_trigger_error() notices
 
