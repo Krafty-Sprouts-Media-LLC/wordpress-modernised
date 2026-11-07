@@ -15,6 +15,7 @@ if (defined('WM_WP_API_LOADED')) {
 define('WM_WP_API_LOADED', true);
 
 require __DIR__.'/version.php';
+require __DIR__.'/constants.php';
 
 require __DIR__.'/interim/kses.php';
 require __DIR__.'/interim/l10n.php';
@@ -35,6 +36,10 @@ require __DIR__.'/functions/return-helpers.php';
 require __DIR__.'/functions/list-helpers.php';
 require __DIR__.'/functions/environment.php';
 require __DIR__.'/functions/values.php';
+require __DIR__.'/functions/utf8.php';
+require __DIR__.'/functions/kses.php';
+require __DIR__.'/functions/formatting.php';
+require __DIR__.'/functions/dates.php';
 require __DIR__.'/functions/cache.php';
 require __DIR__.'/functions/database.php';
 require __DIR__.'/functions/option.php';
@@ -43,3 +48,5 @@ require __DIR__.'/functions/schema.php';
 require __DIR__.'/functions/deprecated.php';
 
 require __DIR__.'/interim/die.php';
+
+require __DIR__.'/default-filters.php';

@@ -33,6 +33,21 @@
             <file>wordpress-develop/tests/phpunit/tests/formatting/wpSlash.php</file>
             <file>wordpress-develop/tests/phpunit/tests/formatting/stripslashesDeep.php</file>
             <file>wordpress-develop/tests/phpunit/tests/formatting/mapDeep.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/escAttr.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/escHtml.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/removeAccents.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/sanitizeKey.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/sanitizeTitle.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/sanitizeTitleWithDashes.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/utf8UriEncode.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/wpBasename.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/wpSpecialchars.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/wpParseIdList.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/wpParseList.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/date/currentDatetime.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/date/currentTime.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/date/wpCheckdate.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/date/wpTimezone.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/option.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/getOptions.php</file>
             <file>wordpress-develop/tests/phpunit/tests/option/updateOption.php</file>

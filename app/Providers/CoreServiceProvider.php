@@ -43,9 +43,8 @@ final class CoreServiceProvider extends ServiceProvider
         add_filter('wp_trigger_error_trigger_error', [WordPressErrors::class, 'shouldTrigger'], 10, 4);
         add_action('wp_trigger_error_always_run', [WordPressErrors::class, 'log'], 10, 3);
 
-        // From WordPress's default-filters.php: options too large to load on every request aren't autoloaded.
-        add_filter('wp_default_autoload_value', 'wp_filter_default_autoload_value_via_option_size', 10, 4);
-        add_action('delete_expired_transients', 'delete_expired_transients');
+        // WordPress's default filters and actions for the areas built (wp-api/default-filters.php).
+        wm_add_default_filters();
 
         $this->bridgeOptionEvents();
 
