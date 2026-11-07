@@ -19,4 +19,18 @@ return [
     */
     'debug_display' => (bool) env('WP_DEBUG_DISPLAY', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Object cache store
+    |--------------------------------------------------------------------------
+    |
+    | The Laravel cache store WordPress's object cache (wp_cache_*()) keeps its
+    | values in between requests, such as 'redis'. Empty: memory for the
+    | request only, as in WordPress. With a store, transients live there too,
+    | and WordPress and Laravel share one cache.
+    |
+    */
+
+    'object_cache' => env('WP_OBJECT_CACHE_STORE'),
+
 ];

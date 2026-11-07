@@ -53,9 +53,76 @@ abstract class WP_UnitTestCase extends TestCase
             $this->_backup_hooks();
         }
 
+        $this->clean_up_global_scope();
+
         $this->start_transaction();
         $this->expectDeprecated();
         add_filter('wp_die_handler', [$this, 'get_wp_die_handler']);
+    }
+
+    /**
+     * Resets the request globals and the object cache before each test.
+     */
+    public function clean_up_global_scope()
+    {
+        $_GET = [];
+        $_POST = [];
+        $_REQUEST = [];
+        self::flush_cache();
+    }
+
+    /**
+     * Flushes the object cache and sets WordPress's global and
+     * non-persistent cache groups again, as WordPress's bootstrap does.
+     */
+    public static function flush_cache()
+    {
+        global $wp_object_cache;
+
+        wp_cache_flush_runtime();
+
+        if (is_object($wp_object_cache) && method_exists($wp_object_cache, '__remoteset')) {
+            $wp_object_cache->__remoteset();
+        }
+
+        wp_cache_flush();
+
+        wp_cache_add_global_groups(
+            [
+                'blog-details',
+                'blog-id-cache',
+                'blog-lookup',
+                'blog_meta',
+                'global-posts',
+                'networks',
+                'network-queries',
+                'sites',
+                'site-details',
+                'site-options',
+                'site-queries',
+                'site-transient',
+                'theme_files',
+                'rss',
+                'users',
+                'user-queries',
+                'user_meta',
+                'useremail',
+                'userlogins',
+                'userslugs',
+            ]
+        );
+
+        wp_cache_add_non_persistent_groups(['counts', 'plugins', 'theme_json']);
+    }
+
+    /**
+     * Flushes the object cache after each test class, as WordPress does.
+     */
+    public static function tear_down_after_class()
+    {
+        self::flush_cache();
+
+        parent::tear_down_after_class();
     }
 
     /**

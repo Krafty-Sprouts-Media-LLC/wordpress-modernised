@@ -39,6 +39,10 @@ final class CoreServiceProvider extends ServiceProvider
         add_filter('wp_trigger_error_trigger_error', [WordPressErrors::class, 'shouldTrigger'], 10, 4);
         add_action('wp_trigger_error_always_run', [WordPressErrors::class, 'log'], 10, 3);
 
+        // WordPress's object cache before the database, as wp-settings.php
+        // does: wp_cache_init() also tells WordPress whether it persists.
+        wp_cache_init();
+
         $this->bootDatabase();
 
         QueryCounter::register($this->app['events']);

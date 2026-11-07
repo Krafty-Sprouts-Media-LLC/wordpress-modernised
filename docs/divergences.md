@@ -69,6 +69,18 @@
 | **Plugins it breaks** | Plugins that only run on PHP older than 8.4. WordPress itself supports 8.4, so plugins maintained for current WordPress are unaffected. |
 | **How they are fixed** | Update the plugin to PHP 8.4, or use a maintained version. |
 
+## The object cache runs on Laravel's cache
+
+**Since:** WM-0.4.0
+
+| | |
+|---|---|
+| **What WordPress does** | `WP_Object_Cache` keeps values in memory for one request. A persistent cache (Redis, Memcached) needs a drop-in file, `wp-content/object-cache.php`, that replaces the class. `wp_cache_flush()` empties everything. |
+| **What we do instead** | `WP_Object_Cache` hands its work to `App\Core\Cache\ObjectCache`: memory for the request, as in WordPress, plus any Laravel cache store named by `WP_OBJECT_CACHE_STORE` (owner's decision A, 2026-11-07). No drop-in: the store is a setting. With a store:<br>- `wp_using_ext_object_cache()` is true, so transients live in the store, as WordPress does with any persistent cache;<br>- `$expire` is honoured;<br>- `wp_cache_add_non_persistent_groups()` keeps those groups in memory;<br>- `wp_cache_flush()` and `wp_cache_flush_group()` move a version number instead of emptying the store, so Laravel's own entries survive;<br>- a value PHP can't serialize (a closure) stays in memory for the request;<br>- `wp_cache_incr()` and `wp_cache_decr()` read, change and write back, so they are not atomic across simultaneous requests, and the item loses any expiry.<br>`$wp_object_cache->cache`, `cache_hits` and `cache_misses` are read-only. `switch_to_blog()` keeps one site (no multisite). |
+| **Why** | Laravel owns the cache (AGENTS.md rule 2). WordPress keeps the cache in memory by default because many hosts have no Redis, and that reason still holds (rule 6), so memory stays the default. |
+| **Plugins it breaks** | Object-cache drop-ins (`object-cache.php`, such as Redis Object Cache): not loaded; set `WP_OBJECT_CACHE_STORE` instead. Plugins that write to `$wp_object_cache->cache` directly. |
+| **How they are fixed** | Use a Laravel cache store. Use the `wp_cache_*()` functions instead of the cache's internals. |
+
 ## The `query` filter sees plugins' queries, not the core's
 
 **Since:** WM-0.4.0
