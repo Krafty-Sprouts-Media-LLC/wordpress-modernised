@@ -27,6 +27,12 @@
             <file>wordpress-develop/tests/phpunit/tests/db/charset.php</file>
             <file>wordpress-develop/tests/phpunit/tests/db/dbDelta.php</file>
             <file>wordpress-develop/tests/phpunit/tests/cache.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/isSerialized.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/isSerializedString.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/functions/maybeSerialize.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/wpSlash.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/stripslashesDeep.php</file>
+            <file>wordpress-develop/tests/phpunit/tests/formatting/mapDeep.php</file>
         </testsuite>
         <testsuite name="adapted">
             <!-- WordPress tests adapted after a recorded divergence (docs/divergences.md). -->

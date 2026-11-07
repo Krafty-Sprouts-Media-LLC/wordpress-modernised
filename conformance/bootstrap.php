@@ -70,6 +70,18 @@ if (Artisan::call('migrate:fresh', ['--force' => true]) !== 0) {
     exit(1);
 }
 
+// Stand-in until the HTTP step: WordPress's own copy of the Requests library,
+// which some tests build objects from (docs/stand-ins.md).
+spl_autoload_register(static function (string $class): void {
+    if (str_starts_with($class, 'WpOrg\\Requests\\')) {
+        $file = WP_TESTS_CHECKOUT.'/src/wp-includes/Requests/src/'.str_replace('\\', '/', substr($class, 15)).'.php';
+
+        if (is_file($file)) {
+            require $file;
+        }
+    }
+});
+
 // Stand-ins first: WordPress's utils.php declares a class that extends wpdb.
 require __DIR__.'/includes/stand-ins.php';
 

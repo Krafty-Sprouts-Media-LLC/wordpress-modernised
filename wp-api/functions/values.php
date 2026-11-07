@@ -1,9 +1,12 @@
 <?php
 
 /**
- * Small value helpers: absint(), and the mbstring encoding switch wpdb uses for byte lengths.
+ * Small value helpers: absint(), the mbstring encoding switch wpdb uses for
+ * byte lengths, the serialization helpers options store values with, and the
+ * slash helpers.
  *
- * Contains code from WordPress 7.1.4: src/wp-includes/load.php and functions.php.
+ * Contains code from WordPress 7.1.4: src/wp-includes/load.php, functions.php
+ * and formatting.php.
  */
 
 /**
@@ -159,4 +162,277 @@ function wp_normalize_path($path): string
     $cache[$original_path] = $wrapper.$path;
 
     return $cache[$original_path];
+}
+
+/**
+ * Serializes data, if needed.
+ *
+ * @since WM-0.4.0
+ * @since WP-2.0.5
+ *
+ * @param  string|array|object  $data  Data that might be serialized.
+ * @return mixed A scalar data.
+ */
+function maybe_serialize($data)
+{
+    if (is_array($data) || is_object($data)) {
+        return serialize($data);
+    }
+
+    /*
+     * Double serialization is required for backward compatibility.
+     * See https://core.trac.wordpress.org/ticket/12930
+     * Also the world will end. See WP 3.6.1.
+     */
+    if (is_serialized($data, false)) {
+        return serialize($data);
+    }
+
+    return $data;
+}
+
+/**
+ * Unserializes data only if it was serialized.
+ *
+ * Like WordPress, any class can be rebuilt: plugins store their own objects in
+ * options. Moving stored values to JSON is a later, recorded change (owner's
+ * decision B, 2026-11-07).
+ *
+ * @since WM-0.4.0
+ * @since WP-2.0.0
+ *
+ * @param  string  $data  Data that might be unserialized.
+ * @return mixed Unserialized data can be any type.
+ */
+function maybe_unserialize($data)
+{
+    if (is_serialized($data)) { // Don't attempt to unserialize data that wasn't serialized going in.
+        return @unserialize(trim($data));
+    }
+
+    return $data;
+}
+
+/**
+ * Checks value to find if it was serialized.
+ *
+ * If $data is not a string, then returned value will always be false.
+ * Serialized data is always a string.
+ *
+ * @since WM-0.4.0
+ * @since WP-2.0.5
+ * @since WP-6.1.0 Added Enum support.
+ *
+ * @param  string  $data  Value to check to see if was serialized.
+ * @param  bool  $strict  Optional. Whether to be strict about the end of the string. Default true.
+ * @return bool False if not serialized and true if it was.
+ */
+function is_serialized($data, $strict = true)
+{
+    // If it isn't a string, it isn't serialized.
+    if (! is_string($data)) {
+        return false;
+    }
+
+    $data = trim($data);
+
+    if ($data === 'N;') {
+        return true;
+    }
+
+    if (strlen($data) < 4) {
+        return false;
+    }
+
+    if ($data[1] !== ':') {
+        return false;
+    }
+
+    if ($strict) {
+        $lastc = substr($data, -1);
+
+        if ($lastc !== ';' && $lastc !== '}') {
+            return false;
+        }
+    } else {
+        $semicolon = strpos($data, ';');
+        $brace = strpos($data, '}');
+
+        // Either ; or } must exist.
+        if ($semicolon === false && $brace === false) {
+            return false;
+        }
+
+        // But neither must be in the first X characters.
+        if ($semicolon !== false && $semicolon < 3) {
+            return false;
+        }
+
+        if ($brace !== false && $brace < 4) {
+            return false;
+        }
+    }
+
+    $token = $data[0];
+
+    switch ($token) {
+        case 's':
+            if ($strict) {
+                if (substr($data, -2, 1) !== '"') {
+                    return false;
+                }
+            } elseif (! str_contains($data, '"')) {
+                return false;
+            }
+            // Or else fall through.
+            // no break
+        case 'a':
+        case 'O':
+        case 'E':
+            return (bool) preg_match("/^{$token}:[0-9]+:/s", $data);
+
+        case 'b':
+        case 'i':
+        case 'd':
+            $end = $strict ? '$' : '';
+
+            return (bool) preg_match("/^{$token}:[0-9.E+-]+;$end/", $data);
+    }
+
+    return false;
+}
+
+/**
+ * Checks whether serialized data is of string type.
+ *
+ * @since WM-0.4.0
+ * @since WP-2.0.5
+ *
+ * @param  string  $data  Serialized data.
+ * @return bool False if not a serialized string, true if it is.
+ */
+function is_serialized_string($data)
+{
+    // if it isn't a string, it isn't a serialized string.
+    if (! is_string($data)) {
+        return false;
+    }
+
+    $data = trim($data);
+
+    if (strlen($data) < 4) {
+        return false;
+    } elseif ($data[1] !== ':') {
+        return false;
+    } elseif (! str_ends_with($data, ';')) {
+        return false;
+    } elseif ($data[0] !== 's') {
+        return false;
+    } elseif (substr($data, -2, 1) !== '"') {
+        return false;
+    } else {
+        return true;
+    }
+}
+
+/**
+ * Adds slashes to a string or recursively adds slashes to strings within an array.
+ *
+ * This should be used when preparing data for core API that expects slashed data.
+ * This should not be used to escape data going directly into an SQL query.
+ *
+ * @since WM-0.4.0
+ * @since WP-3.6.0
+ * @since WP-5.5.0 Non-string values are left untouched.
+ *
+ * @param  string|array  $value  String or array of data to slash.
+ * @return string|array Slashed `$value`, in the same type as supplied.
+ */
+function wp_slash($value)
+{
+    if (is_array($value)) {
+        return array_map('wp_slash', $value);
+    }
+
+    if (is_string($value)) {
+        return addslashes($value);
+    }
+
+    return $value;
+}
+
+/**
+ * Removes slashes from a string or recursively removes slashes from strings within an array.
+ *
+ * This should be used to remove slashes from data passed to core API that
+ * expects data to be unslashed.
+ *
+ * @since WM-0.4.0
+ * @since WP-3.6.0
+ *
+ * @param  string|array  $value  String or array of data to unslash.
+ * @return string|array Unslashed `$value`, in the same type as supplied.
+ */
+function wp_unslash($value)
+{
+    return stripslashes_deep($value);
+}
+
+/**
+ * Navigates through an array, object, or scalar, and removes slashes from the values.
+ *
+ * @since WM-0.4.0
+ * @since WP-2.0.0
+ *
+ * @param  mixed  $value  The value to be stripped.
+ * @return mixed Stripped value.
+ */
+function stripslashes_deep($value)
+{
+    return map_deep($value, 'stripslashes_from_strings_only');
+}
+
+/**
+ * Callback function for `stripslashes_deep()` which strips slashes from strings.
+ *
+ * @since WM-0.4.0
+ * @since WP-4.4.0
+ *
+ * @param  mixed  $value  The array or string to be stripped.
+ * @return mixed The stripped value.
+ */
+function stripslashes_from_strings_only($value)
+{
+    return is_string($value) ? stripslashes($value) : $value;
+}
+
+/**
+ * Maps a function to all non-iterable elements of an array or an object.
+ *
+ * This is similar to `array_walk_recursive()` but acts upon objects too.
+ *
+ * @since WM-0.4.0
+ * @since WP-4.4.0
+ *
+ * @param  mixed  $value  The array, object, or scalar.
+ * @param  callable  $callback  The function to map onto $value.
+ * @return mixed The value with the callback applied to all non-arrays and non-objects inside it.
+ */
+function map_deep($value, $callback)
+{
+    if (is_array($value)) {
+        foreach ($value as $index => $item) {
+            $value[$index] = map_deep($item, $callback);
+        }
+    } elseif (is_object($value)) {
+        $object_vars = get_object_vars($value);
+
+        foreach ($object_vars as $property_name => $property_value) {
+            $value->$property_name = map_deep($property_value, $callback);
+        }
+    } else {
+        $value = call_user_func($callback, $value);
+    }
+
+    return $value;
 }

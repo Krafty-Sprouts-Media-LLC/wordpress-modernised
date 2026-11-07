@@ -19,6 +19,7 @@ require __DIR__.'/version.php';
 require __DIR__.'/interim/kses.php';
 require __DIR__.'/interim/l10n.php';
 require __DIR__.'/interim/multisite.php';
+require __DIR__.'/interim/sanitize-option.php';
 
 require __DIR__.'/classes/WP_Hook.php';
 require __DIR__.'/classes/WP_Filter_Sentinel.php';
@@ -38,5 +39,6 @@ require __DIR__.'/functions/cache.php';
 require __DIR__.'/functions/database.php';
 require __DIR__.'/functions/db-delta.php';
 require __DIR__.'/functions/schema.php';
+require __DIR__.'/functions/deprecated.php';
 
 require __DIR__.'/interim/die.php';

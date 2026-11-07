@@ -7,6 +7,8 @@
 | Stand-in | Where | What it lacks compared with WordPress | Replaced by |
 |---|---|---|---|
 | `wp_kses()` | `wp-api/interim/kses.php` | Keeps allowed tags but does not filter attributes or URL protocols. Only `wp_trigger_error()` uses it, on its own messages | The HTML-filtering (kses) step |
+| `sanitize_option()` | `wp-api/interim/sanitize-option.php` | Runs only the `sanitize_option_{$option}` filter; none of WordPress's rules for its own options (`admin_email`, `siteurl`, `posts_per_page`, …), and no settings errors | The formatting step |
+| The Requests library (`WpOrg\Requests\…`) | `conformance/bootstrap.php` (checker only) | WordPress's own copy, autoloaded from the fetched sources, because some tests build its objects | The HTTP step |
 | `WP_Post` | `conformance/includes/stand-ins.php` (checker only) | Copies fields onto itself; no behaviour | The posts step |
 | `wpdb` | `conformance/includes/stand-ins.php` (checker only) | Empty class. WordPress's test utilities declare a class extending it | The database step |
 | `wp_die()`, `_default_wp_die_handler()`, `dead_db()` | `wp-api/interim/die.php` | `wp_die()` runs the `wp_die_handler` filter, but doesn't pick AJAX, JSON or XML-RPC handlers; the default handler throws `WP_Exception` (Laravel shows an error page) instead of printing WordPress's HTML page; no `db-error.php` template | WordPress's error pages, with the request step |
