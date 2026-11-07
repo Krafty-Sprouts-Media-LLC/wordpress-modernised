@@ -10,6 +10,7 @@ use App\Core\Hooks\WordPressErrors;
 use App\Core\Options\Events\OptionAdded;
 use App\Core\Options\Events\OptionDeleted;
 use App\Core\Options\Events\OptionUpdated;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use wpdb;
@@ -48,9 +49,12 @@ final class CoreServiceProvider extends ServiceProvider
 
         $this->bridgeOptionEvents();
 
-        // WordPress's object cache before the database, as wp-settings.php
-        // does: wp_cache_init() also tells WordPress whether it persists.
-        wp_cache_init();
+        // WordPress's object cache before the database, as wp-settings.php does.
+        wp_start_object_cache();
+
+        // A queue worker boots once and runs many jobs: each starts with a fresh
+        // memory, as each WordPress request does, so no job sees another's options.
+        $this->app['events']->listen(JobProcessing::class, static fn () => wp_cache_flush_runtime());
 
         $this->bootDatabase();
 

@@ -27,6 +27,50 @@ function wp_cache_init()
 }
 
 /**
+ * Starts the WordPress object cache, and sets WordPress's default global and
+ * non-persistent groups.
+ *
+ * WM: there is no object-cache.php drop-in to load: a persistent store is the
+ * WP_OBJECT_CACHE_STORE setting (docs/divergences.md). Called once at boot.
+ *
+ * @since WM-0.4.0
+ * @since WP-3.0.0
+ */
+function wp_start_object_cache()
+{
+    wp_cache_init();
+
+    wp_cache_add_global_groups(
+        [
+            'blog-details',
+            'blog-id-cache',
+            'blog-lookup',
+            'blog_meta',
+            'global-posts',
+            'image_editor',
+            'networks',
+            'network-queries',
+            'sites',
+            'site-details',
+            'site-options',
+            'site-queries',
+            'site-transient',
+            'theme_files',
+            'translation_files',
+            'rss',
+            'users',
+            'user-queries',
+            'user_meta',
+            'useremail',
+            'userlogins',
+            'userslugs',
+        ]
+    );
+
+    wp_cache_add_non_persistent_groups(['counts', 'plugins', 'theme_json']);
+}
+
+/**
  * Adds data to the cache, if the cache key doesn't already exist.
  *
  * @since WM-0.4.0

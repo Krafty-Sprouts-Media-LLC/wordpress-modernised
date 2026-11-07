@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Core\Cache;
 
 use App\Core\Cache\ObjectCache;
+use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Queue\Jobs\SyncJob;
 use Illuminate\Support\Facades\Cache;
 use ReflectionMethod;
 use Tests\TestCase;
@@ -148,6 +150,48 @@ final class ObjectCacheTest extends TestCase
 
         $this->assertNotInstanceOf(ObjectCacheTestValue::class, $value);
         $this->assertFalse($value);
+    }
+
+    public function test_entries_without_expiry_still_leave_the_store_eventually(): void
+    {
+        $this->usePersistentStore();
+
+        (new WP_Object_Cache)->set('k', 'v', 'g');
+        $this->travel(config('wordpress.object_cache_max_ttl') + 1)->seconds();
+
+        $this->assertFalse((new WP_Object_Cache)->get('k', 'g'));
+    }
+
+    public function test_a_write_after_another_requests_flush_is_seen(): void
+    {
+        $this->usePersistentStore();
+        $first = new WP_Object_Cache;
+        $first->get('anything', 'g');
+
+        (new WP_Object_Cache)->flush();
+        $first->set('k', 'fresh', 'g');
+
+        $this->assertSame('fresh', (new WP_Object_Cache)->get('k', 'g'));
+    }
+
+    public function test_each_queued_job_starts_with_a_fresh_memory(): void
+    {
+        wp_cache_set('k', 'from an earlier job', 'g');
+
+        event(new JobProcessing('sync', new SyncJob(app(), '{}', 'sync', 'default')));
+
+        $this->assertFalse(wp_cache_get('k', 'g'));
+    }
+
+    public function test_wordpress_default_groups_stay_in_memory(): void
+    {
+        $this->usePersistentStore();
+        wp_start_object_cache();
+        wp_cache_set('k', 3, 'counts');
+
+        wp_start_object_cache();
+
+        $this->assertFalse(wp_cache_get('k', 'counts'));
     }
 
     public function test_a_persistent_store_is_reported_to_wordpress(): void

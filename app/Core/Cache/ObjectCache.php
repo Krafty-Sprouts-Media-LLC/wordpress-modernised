@@ -62,7 +62,15 @@ final class ObjectCache
 
     private int $misses = 0;
 
-    public function __construct(private readonly ?Repository $store) {}
+    /**
+     * @param  int  $maxTtl  Seconds a value with no expiry stays in the store. Flushing
+     *                       leaves old entries behind under an old version; this
+     *                       lets them expire even on stores that never evict.
+     */
+    public function __construct(
+        private readonly ?Repository $store,
+        private readonly int $maxTtl = 604800,
+    ) {}
 
     /**
      * The cache for this app: memory only, or memory in front of the Laravel
@@ -72,7 +80,10 @@ final class ObjectCache
     {
         $store = config('wordpress.object_cache');
 
-        return new self(is_string($store) && $store !== '' ? Cache::store($store) : null);
+        return new self(
+            is_string($store) && $store !== '' ? Cache::store($store) : null,
+            (int) config('wordpress.object_cache_max_ttl', 604800),
+        );
     }
 
     public function isPersistent(): bool
@@ -127,7 +138,7 @@ final class ObjectCache
         unset($this->runtime[$group][$key]);
 
         if ($this->persists($group)) {
-            $existed = $this->store->forget($this->storeKey($key, $group)) || $existed;
+            $existed = $this->store->forget($this->storeKey($key, $group, fresh: true)) || $existed;
         }
 
         return $existed;
@@ -157,6 +168,9 @@ final class ObjectCache
     public function flushRuntime(): bool
     {
         $this->runtime = [];
+        // Versions are read again too: another request may have flushed since.
+        $this->version = null;
+        $this->groupVersions = [];
 
         return true;
     }
@@ -337,7 +351,7 @@ final class ObjectCache
 
     private function toStore(int|string $key, string $group, mixed $data, int $expire): void
     {
-        $storeKey = $this->storeKey($key, $group);
+        $storeKey = $this->storeKey($key, $group, fresh: true);
 
         try {
             $raw = serialize([$data]);
@@ -354,15 +368,24 @@ final class ObjectCache
             return;
         }
 
-        $expire > 0 ? $this->store->put($storeKey, $raw, $expire) : $this->store->forever($storeKey, $raw);
+        $this->store->put($storeKey, $raw, $expire > 0 ? $expire : $this->maxTtl);
     }
 
     /**
      * A key every store accepts (Memcached refuses spaces and long keys), tied
      * to the current flush version and the group's version.
+     *
+     * Reads keep the versions this request first saw (one store read each).
+     * Writes read them afresh, so a write made after another request flushed
+     * lands under the new version instead of an abandoned one.
      */
-    private function storeKey(int|string $key, string $group): string
+    private function storeKey(int|string $key, string $group, bool $fresh = false): string
     {
+        if ($fresh) {
+            $this->version = null;
+            unset($this->groupVersions[$group]);
+        }
+
         $this->version ??= (int) $this->store->get(self::VERSION_KEY, 0);
         $this->groupVersions[$group] ??= (int) $this->store->get(self::GROUP_VERSION_KEY.hash('xxh128', $group), 0);
 

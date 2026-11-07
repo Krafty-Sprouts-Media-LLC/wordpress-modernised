@@ -43,4 +43,12 @@ return [
 
     'object_cache_classes' => [],
 
+    /*
+    | Seconds a cached value with no expiry stays in that store (default: a
+    | week). Flushing leaves old entries behind under an old version number;
+    | this lets them expire even on stores that never evict (database, file).
+    */
+
+    'object_cache_max_ttl' => (int) env('WP_OBJECT_CACHE_MAX_TTL', 604800),
+
 ];
